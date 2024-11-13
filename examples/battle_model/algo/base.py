@@ -8,7 +8,7 @@ import math
 from graph_nets import graphs
 from graph_nets import utils_np
 from graph_nets import utils_tf
-from graph_nets.demos import models
+from graph_nets.demos_tf2 import models
 import sonnet as snt
 import sonnet as snt
 from tensorflow.contrib import rnn
