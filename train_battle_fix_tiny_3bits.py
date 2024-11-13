@@ -81,7 +81,12 @@ if __name__ == '__main__':
     env.set_render_dir(os.path.join(BASE_DIR, 'examples/battle_model', 'build/render'))
     handles = env.get_handles()
 
-    tf_config = tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)
+
+    # 禁用 Eager Execution（如果你使用 TensorFlow 1.x 的代码）
+    tf.compat.v1.disable_eager_execution()
+    # 使用 ConfigProto 配置
+    tf_config = tf.compat.v1.ConfigProto(allow_soft_placement=True, log_device_placement=False)
+    #tf_config = tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)
     tf_config.gpu_options.allow_growth = True
 
     log_dir = os.path.join(BASE_DIR,'data/tmp/{}'.format(args.algo+'fixtiny3b6h'+str(args.seed)+'-'+str(args.len_nei)))
