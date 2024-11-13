@@ -11,7 +11,6 @@ from graph_nets import utils_tf
 from graph_nets.demos_tf2 import models
 import sonnet as snt
 import sonnet as snt
-from tensorflow.contrib import rnn
 import  sklearn.preprocessing as preprocessing
 max_len=20
 def length(sequence):
