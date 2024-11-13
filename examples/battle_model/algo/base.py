@@ -1,7 +1,6 @@
 import tensorflow as tf
 import numpy as np
 import pdb
-from tensorflow.nn.rnn_cell import GRUCell
 
 from magent.gridworld import GridWorld
 import time
