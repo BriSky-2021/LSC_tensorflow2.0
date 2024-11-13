@@ -269,4 +269,4 @@ class HGCrpNetwork(snt.Module):
 
     def __call__(self, inputs):
         # Pass the inputs through the network in sequence
-        return self._qnet(self._Lnetwork(self._network(self._obsEncoder(inputs)))))
+        return self._qnet(self._Lnetwork(self._network(self._obsEncoder(inputs))))
