@@ -759,7 +759,7 @@ class obsEncoder(_base.AbstractModule):
  
   def __init__(self,
                encoder_fn,
-               reducer=tf.unsorted_segment_sum,
+               reducer=tf.math.unsorted_segment_sum,
                name="obsEncoder"):
     super(obsEncoder, self).__init__(name=name)
 
@@ -799,7 +799,7 @@ class LCommNet(_base.AbstractModule):
                edge_model_fn,
               #  node_encoder_model_fn,
                node_model_fn,
-               reducer=tf.unsorted_segment_sum,
+               reducer=tf.math.unsorted_segment_sum,
                name="lcomm_net"):
     super(LCommNet, self).__init__(name=name)
 
@@ -829,7 +829,7 @@ class LCommNet2(_base.AbstractModule):
                edge_model_fn,
               #  node_encoder_model_fn,
                node_model_fn,
-               reducer=tf.unsorted_segment_sum,
+               reducer=tf.math.unsorted_segment_sum,
                name="lcomm_net2"):
     super(LCommNet2, self).__init__(name=name)
 
@@ -859,7 +859,7 @@ class HCommNet(_base.AbstractModule):
                edge_model_fn,
               #  node_encoder_model_fn,
                node_model_fn,
-               reducer=tf.unsorted_segment_sum,
+               reducer=tf.math.unsorted_segment_sum,
                name="hcomm_net"):
     super(HCommNet, self).__init__(name=name)
 
@@ -889,7 +889,7 @@ class TCommNet(_base.AbstractModule):
                edge_model_fn,
               #  node_encoder_model_fn,
                node_model_fn,
-               reducer=tf.unsorted_segment_sum,
+               reducer=tf.math.unsorted_segment_sum,
                name="tcomm_net"):
     super(TCommNet, self).__init__(name=name)
 

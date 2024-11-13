@@ -819,8 +819,8 @@ class toHNodeBlock(_base.AbstractModule):
                use_sent_edges=False,
                use_nodes=True,
                use_globals=False,
-               received_edges_reducer=tf.unsorted_segment_sum,
-               sent_edges_reducer=tf.unsorted_segment_sum,
+               received_edges_reducer=tf.math.unsorted_segment_sum,
+               sent_edges_reducer=tf.math.unsorted_segment_sum,
                name="toHnode_block"):
     super(toHLNodeBlock, self).__init__(name=name)
 
@@ -863,8 +863,8 @@ class toLNodeBlock(_base.AbstractModule):
                use_sent_edges=False,
                use_nodes=True,
                use_globals=True,
-               received_edges_reducer=tf.unsorted_segment_sum,
-               sent_edges_reducer=tf.unsorted_segment_sum,
+               received_edges_reducer=tf.math.unsorted_segment_sum,
+               sent_edges_reducer=tf.math.unsorted_segment_sum,
                name="lnode_block"):
     super(toLNodeBlock, self).__init__(name=name)
 
@@ -908,8 +908,8 @@ class LNodeBlock(_base.AbstractModule):
                use_sent_edges=False,
                use_nodes=True,
                use_globals=True,
-               received_edges_reducer=tf.unsorted_segment_sum,
-               sent_edges_reducer=tf.unsorted_segment_sum,
+               received_edges_reducer=tf.math.unsorted_segment_sum,
+               sent_edges_reducer=tf.math.unsorted_segment_sum,
                name="lnode_block"):
     super(LNodeBlock, self).__init__(name=name)
 
@@ -956,7 +956,7 @@ class HEdgeBlock(_base.AbstractModule):
                use_receiver_nodes=True,
                use_sender_nodes=True,
                use_globals=True,
-               received_edges_reducer=tf.unsorted_segment_sum,
+               received_edges_reducer=tf.math.unsorted_segment_sum,
                name="hedge_block"):
     
     super(HEdgeBlock, self).__init__(name=name)
@@ -1005,8 +1005,8 @@ class HNodeBlock(_base.AbstractModule):
                use_sent_edges=False,
                use_nodes=True,
                use_globals=True,
-               received_edges_reducer=tf.unsorted_segment_sum,
-               sent_edges_reducer=tf.unsorted_segment_sum,
+               received_edges_reducer=tf.math.unsorted_segment_sum,
+               sent_edges_reducer=tf.math.unsorted_segment_sum,
                name="node_block"):
     super(HNodeBlock, self).__init__(name=name)
 
