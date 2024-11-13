@@ -274,12 +274,51 @@ class GCrpNet:
 
         self.len_nei=len_nei
         self.temperature = 0.1
-        self.act_input = tf.placeholder(tf.int32, (None,), name="Act")
-        self.act_one_hot = tf.one_hot(self.act_input, depth=self.num_actions, on_value=1.0, off_value=0.0)
+        # replace
+        #self.act_input = tf.placeholder(tf.int32, (None,), name="Act")
+        #self.act_one_hot = tf.one_hot(self.act_input, depth=self.num_actions, on_value=1.0, off_value=0.0)
         self.lr= learning_rate
         self.tau = tau
         self.gamma = gamma
         self.is_comm=is_comm
+
+        # begin to replace
+
+        # Using Input layer instead of placeholder
+        self.act_input = tf.keras.Input(shape=(None,), dtype=tf.int32, name="Act")
+        self.act_one_hot = tf.one_hot(self.act_input, depth=self.num_actions, on_value=1.0, off_value=0.0)
+        
+        self.input_ph = utils_tf.placeholders_from_data_dicts(cons_datas(self.num_actions))
+        
+        # Define the evaluation and target networks (Eval-Net and Target-Net)
+        with tf.name_scope("Eval-Net"):
+            self.eval_name = "Eval-Net"
+            self.e_graph = self._construct_net()
+            self.e_variables = self.e_graph.trainable_variables
+        
+        with tf.name_scope("Target-Net"):
+            self.target_name = "Target-Net"
+            self.t_graph = self._construct_net()
+            self.t_variables = self.t_graph.trainable_variables
+        
+        with tf.name_scope("Update"):
+            # Use `tf.assign` equivalent in TF2.x: Assigning the target network
+            self.update_op = [
+                tf.compat.v1.assign(self.t_variables[i],
+                    self.tau * self.e_variables[i] + (1. - self.tau) * self.t_variables[i])
+                for i in range(len(self.t_variables))
+            ]
+        
+        with tf.name_scope("Optimization"):
+            # Instead of placeholder for target_q_input, pass it directly
+            self.target_q_input = tf.keras.Input(shape=(None,), dtype=tf.float32, name="Q-Input")
+            
+            self.e_q_max = tf.reduce_sum(tf.multiply(self.act_one_hot, self.e_graph.q), axis=1)
+            self.loss = tf.reduce_sum(tf.square(self.target_q_input - self.e_q_max)) / tf.cast(tf.reduce_sum(self.e_graph.n_node), tf.float32)
+            self.train_op = tf.keras.optimizers.Adam(self.lr).minimize(self.loss)
+
+        '''
+
         with tf.variable_scope(name or "GHCrpNet"):
             self.name_scope = tf.get_variable_scope().name
             # print(self.view_space)
@@ -304,6 +343,7 @@ class GCrpNet:
                 self.e_q_max = tf.reduce_sum(tf.multiply(self.act_one_hot, self.e_graph.q), axis=1)
                 self.loss = tf.reduce_sum(tf.square(self.target_q_input - self.e_q_max))/tf.cast(tf.reduce_sum(self.e_graph.n_node),tf.float32)
                 self.train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss)
+        '''
     
     def get_indexs(self,poss):
         nei_len=self.len_nei
