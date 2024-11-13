@@ -10,7 +10,7 @@ import pdb
 from examples.battle_model.algo import spawn_ai
 from examples.battle_model.algo import tools
 from examples.battle_model.senario_battle import play
-from tensorflow import set_random_seed
+# from tensorflow import set_random_seed
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -72,7 +72,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     np.random.seed(args.seed)
-    set_random_seed(args.seed)
+    # set_random_seed(args.seed)
+    tf.random.set_seed(args.seed)
     # Initialize the environment
     # env = magent.GridWorld('battle', map_size=args.map_size)
     env=magent.GridWorld(load_config(size=args.map_size))
