@@ -47,37 +47,15 @@ def assert_new_op_prefixes(test, expected_prefix, assert_some_new_ops=True):
     test.assertEqual(expected_prefix, op_name[:prefix_length])
 
 
-def generate_random_data_dict(
-    node_shape, edge_shape, globals_shape,
-    num_nodes_range=(15, 20), num_edges_range=(30, 35)):
-  num_nodes = np.random.randint(*num_nodes_range)
-  num_edges = np.random.randint(*num_edges_range)
-
-  return {
-      "nodes": np.random.normal(size=(num_nodes,) + node_shape),
-      "edges": np.random.normal(size=(num_edges,) + edge_shape),
-      "globals": np.random.normal(size=globals_shape),
-      "senders": np.random.randint(num_nodes, size=num_edges),
-      "receivers": np.random.randint(num_nodes, size=num_edges),
-      "n_node": num_nodes,
-      "n_edge": num_edges,
-  }
-
-
 def mask_leading_dimension(tensor):
   return tf.placeholder_with_default(tensor,
                                      [None] + tensor.get_shape().as_list()[1:])
 
 
-NODES_DIMS = [7, 11]
-EDGES_DIMS = [13, 14]
-GLOBALS_DIMS = [5, 3]
-
-
 class GraphsTest(tf.test.TestCase):
   """A base class for tests that operate on GraphsNP or GraphsTF."""
 
-  def _populate_test_data(self, max_size):
+  def populate_test_data(self, max_size):
     """Populates the class fields with data used for the tests.
 
     This creates a batch of graphs with number of nodes from 0 to `num`,
@@ -111,12 +89,11 @@ class GraphsTest(tf.test.TestCase):
       return np.arange(np.prod(shape)).reshape(shape).astype(dtype)
 
     for i, (n_node_, n_edge_) in enumerate(zip(n_node, n_edge)):
-      n = _make_default_state([n_node_,] + NODES_DIMS, "f4") + i * 100.
-      e = _make_default_state(
-          [n_edge_,] + EDGES_DIMS, np.float64) + i * 100. + 1000.
+      n = _make_default_state([n_node_, 7, 11], "f4") + i * 100.
+      e = _make_default_state([n_edge_, 13, 14], np.float64) + i * 100. + 1000.
       r = _make_default_state([n_edge_], np.int32) % n_node[i]
       s = (_make_default_state([n_edge_], np.int32) + 1) % n_node[i]
-      g = _make_default_state(GLOBALS_DIMS, "f4") - i * 100. - 1000.
+      g = _make_default_state([5, 3], "f4") - i * 100. - 1000.
 
       nodes.append(n)
       edges.append(e)
@@ -147,7 +124,6 @@ class GraphsTest(tf.test.TestCase):
         globals=np.stack(globals_),
         n_node=np.array(n_node),
         n_edge=np.array(n_edge)))
-    self.graphs_dicts = graphs_dicts
 
   def _assert_graph_equals_np(self, graph0, graph, force_edges_ordering=False):
     """Asserts that all the graph fields of graph0 and graph match."""
@@ -195,5 +171,5 @@ class GraphsTest(tf.test.TestCase):
     self.assertAllClose(sorted_senders0, sorted_senders)
 
   def setUp(self):
-    self._populate_test_data(max_size=2)
+    self.populate_test_data(max_size=2)
     tf.reset_default_graph()

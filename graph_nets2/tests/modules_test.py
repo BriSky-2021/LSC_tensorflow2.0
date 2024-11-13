@@ -32,7 +32,6 @@ import sonnet as snt
 import tensorflow as tf
 
 
-
 SMALL_GRAPH_1 = {
     "globals": [1.1, 1.2, 1.3],
     "nodes": [[10.1, 10.2], [20.1, 20.2], [30.1, 30.2]],
@@ -78,11 +77,6 @@ class GraphModuleTest(tf.test.TestCase, parameterized.TestCase):
     super(GraphModuleTest, self).setUp()
     tf.set_random_seed(0)
 
-  def _assert_all_none_or_all_close(self, expected, actual, *args, **kwargs):
-    if expected is None:
-      return self.assertAllEqual(expected, actual)
-    return self.assertAllClose(expected, actual, *args, **kwargs)
-
   def _get_input_graph(self, none_field=None):
     input_graph = utils_tf.data_dicts_to_graphs_tuple(
         [SMALL_GRAPH_1, SMALL_GRAPH_2, SMALL_GRAPH_3, SMALL_GRAPH_4])
@@ -114,7 +108,7 @@ class GraphModuleTest(tf.test.TestCase, parameterized.TestCase):
     # No error at construction time.
     output = network(input_graph)
     # No error at runtime.
-    with tf.Session() as sess:
+    with self.test_session() as sess:
       sess.run(tf.global_variables_initializer())
       sess.run(output)
 
@@ -141,7 +135,7 @@ class GraphIndependentTest(GraphModuleTest):
     expected_output_nodes = model._node_model(input_graph.nodes)
     expected_output_globals = model._global_model(input_graph.globals)
 
-    with tf.Session() as sess:
+    with self.test_session() as sess:
       sess.run(tf.global_variables_initializer())
       (output_graph_out,
        expected_edges_out, expected_nodes_out, expected_globals_out) = sess.run(
@@ -150,12 +144,9 @@ class GraphIndependentTest(GraphModuleTest):
             expected_output_nodes,
             expected_output_globals))
 
-    self._assert_all_none_or_all_close(expected_edges_out,
-                                       output_graph_out.edges)
-    self._assert_all_none_or_all_close(expected_nodes_out,
-                                       output_graph_out.nodes)
-    self._assert_all_none_or_all_close(expected_globals_out,
-                                       output_graph_out.globals)
+    self.assertAllEqual(expected_edges_out, output_graph_out.edges)
+    self.assertAllEqual(expected_nodes_out, output_graph_out.nodes)
+    self.assertAllEqual(expected_globals_out, output_graph_out.globals)
 
   @parameterized.named_parameters(
       ("default name", None), ("custom name", "custom_name"))
@@ -199,7 +190,7 @@ class GraphIndependentTest(GraphModuleTest):
       ("differently shaped nodes", "nodes"),
       ("differently shaped globals", "globals"),)
   def test_incompatible_higher_rank_inputs_no_raise(self, field_to_reshape):
-    """A GraphIndependent does not make assumptions on its inputs shapes."""
+    """An InteractionNetwork does not make assumption on its inputs shapes."""
     input_graph = self._get_shaped_input_graph()
     edge_model_fn, node_model_fn, global_model_fn = self._get_shaped_model_fns()
     input_graph = input_graph.map(
@@ -297,18 +288,15 @@ class GraphNetworkTest(GraphModuleTest):
     expected_nodes = expected_output_node_block.nodes
     expected_globals = expected_output_global_block.globals
 
-    with tf.Session() as sess:
+    with self.test_session() as sess:
       sess.run(tf.global_variables_initializer())
       (output_graph_out,
        expected_edges_out, expected_nodes_out, expected_globals_out) = sess.run(
            (output_graph, expected_edges, expected_nodes, expected_globals))
 
-    self._assert_all_none_or_all_close(expected_edges_out,
-                                       output_graph_out.edges)
-    self._assert_all_none_or_all_close(expected_nodes_out,
-                                       output_graph_out.nodes)
-    self._assert_all_none_or_all_close(expected_globals_out,
-                                       output_graph_out.globals)
+    self.assertAllEqual(expected_edges_out, output_graph_out.edges)
+    self.assertAllEqual(expected_nodes_out, output_graph_out.nodes)
+    self.assertAllEqual(expected_globals_out, output_graph_out.globals)
 
   def test_dynamic_batch_sizes(self):
     """Checks that all batch sizes are as expected through a GraphNetwork."""
@@ -316,7 +304,7 @@ class GraphNetworkTest(GraphModuleTest):
     placeholders = input_graph.map(_mask_leading_dimension, graphs.ALL_FIELDS)
     model = self._get_model()
     output = model(placeholders)
-    with tf.Session() as sess:
+    with self.test_session() as sess:
       sess.run(tf.global_variables_initializer())
       other_input_graph = utils_np.data_dicts_to_graphs_tuple(
           [SMALL_GRAPH_1, SMALL_GRAPH_2])
@@ -396,18 +384,15 @@ class GraphNetworkTest(GraphModuleTest):
     expected_nodes = expected_output_node_block.nodes
     expected_globals = expected_output_global_block.globals
 
-    with tf.Session() as sess:
+    with self.test_session() as sess:
       sess.run(tf.global_variables_initializer())
       (output_graph_out,
        expected_edges_out, expected_nodes_out, expected_globals_out) = sess.run(
            (output_graph, expected_edges, expected_nodes, expected_globals))
 
-    self._assert_all_none_or_all_close(expected_edges_out,
-                                       output_graph_out.edges)
-    self._assert_all_none_or_all_close(expected_nodes_out,
-                                       output_graph_out.nodes)
-    self._assert_all_none_or_all_close(expected_globals_out,
-                                       output_graph_out.globals)
+    self.assertAllEqual(expected_edges_out, output_graph_out.edges)
+    self.assertAllEqual(expected_nodes_out, output_graph_out.nodes)
+    self.assertAllEqual(expected_globals_out, output_graph_out.globals)
 
   @parameterized.named_parameters(
       ("received edges only", True, False, False, False, None, None),
@@ -479,18 +464,15 @@ class GraphNetworkTest(GraphModuleTest):
     expected_nodes = expected_output_node_block.nodes
     expected_globals = expected_output_global_block.globals
 
-    with tf.Session() as sess:
+    with self.test_session() as sess:
       sess.run(tf.global_variables_initializer())
       (output_graph_out,
        expected_edges_out, expected_nodes_out, expected_globals_out) = sess.run(
            (output_graph, expected_edges, expected_nodes, expected_globals))
 
-    self._assert_all_none_or_all_close(expected_edges_out,
-                                       output_graph_out.edges)
-    self._assert_all_none_or_all_close(expected_nodes_out,
-                                       output_graph_out.nodes)
-    self._assert_all_none_or_all_close(expected_globals_out,
-                                       output_graph_out.globals)
+    self.assertAllEqual(expected_edges_out, output_graph_out.edges)
+    self.assertAllEqual(expected_nodes_out, output_graph_out.nodes)
+    self.assertAllEqual(expected_globals_out, output_graph_out.globals)
 
   @parameterized.named_parameters(
       ("edges only", True, False, False, None, None),
@@ -519,7 +501,7 @@ class GraphNetworkTest(GraphModuleTest):
                       "use_receiver_nodes": False,
                       "use_sender_nodes": False,
                       "use_globals": False}
-    # Identity node model
+     # Identity node model
     node_model_fn = lambda: tf.identity
     node_block_opt = {"use_received_edges": False,
                       "use_sent_edges": False,
@@ -557,18 +539,15 @@ class GraphNetworkTest(GraphModuleTest):
     expected_nodes = expected_output_node_block.nodes
     expected_globals = expected_output_global_block.globals
 
-    with tf.Session() as sess:
+    with self.test_session() as sess:
       sess.run(tf.global_variables_initializer())
       (output_graph_out,
        expected_edges_out, expected_nodes_out, expected_globals_out) = sess.run(
            (output_graph, expected_edges, expected_nodes, expected_globals))
 
-    self._assert_all_none_or_all_close(expected_edges_out,
-                                       output_graph_out.edges)
-    self._assert_all_none_or_all_close(expected_nodes_out,
-                                       output_graph_out.nodes)
-    self._assert_all_none_or_all_close(expected_globals_out,
-                                       output_graph_out.globals)
+    self.assertAllEqual(expected_edges_out, output_graph_out.edges)
+    self.assertAllEqual(expected_nodes_out, output_graph_out.nodes)
+    self.assertAllEqual(expected_globals_out, output_graph_out.globals)
 
   def test_higher_rank_outputs(self):
     """Tests that a graph net can be build with higher rank inputs/outputs."""
@@ -681,14 +660,14 @@ class InteractionNetworkTest(GraphModuleTest):
     expected_edges = expected_output_edge_block.edges
     expected_nodes = expected_output_node_block.nodes
 
-    with tf.Session() as sess:
+    with self.test_session() as sess:
       sess.run(tf.global_variables_initializer())
       (actual_edges_out, actual_nodes_out,
        expected_edges_out, expected_nodes_out) = sess.run(
            [edges_out, nodes_out, expected_edges, expected_nodes])
 
-    self._assert_all_none_or_all_close(expected_edges_out, actual_edges_out)
-    self._assert_all_none_or_all_close(expected_nodes_out, actual_nodes_out)
+    self.assertAllEqual(expected_edges_out, actual_edges_out)
+    self.assertAllEqual(expected_nodes_out, actual_nodes_out)
 
   @parameterized.named_parameters(
       ("no nodes", ["nodes"],),
@@ -749,7 +728,7 @@ class RelationNetworkTest(GraphModuleTest):
   @parameterized.named_parameters(
       ("default name", None), ("custom name", "custom_name"))
   def test_created_variables(self, name=None):
-    """Verifies variable names and shapes created by a RelationNetwork."""
+    """Verifies variable names and shapes created by an InteractionNetwork."""
     name = name if name is not None else "relation_network"
     expected_var_shapes_dict = {
         name + "/edge_block/linear/b:0": [5],
@@ -803,12 +782,12 @@ class RelationNetworkTest(GraphModuleTest):
     self.assertEqual(input_graph.edges, output_graph.edges)
     self.assertEqual(input_graph.nodes, output_graph.nodes)
 
-    with tf.Session() as sess:
+    with self.test_session() as sess:
       sess.run(tf.global_variables_initializer())
       (actual_globals_out, expected_globals_out) = sess.run(
           (output_graph.globals, expected_output_global_block.globals))
 
-    self._assert_all_none_or_all_close(expected_globals_out, actual_globals_out)
+    self.assertAllEqual(expected_globals_out, actual_globals_out)
 
   @parameterized.named_parameters(
       ("no nodes", ["nodes"],), ("no edges", ["edges", "receivers", "senders"],)
@@ -826,7 +805,7 @@ class RelationNetworkTest(GraphModuleTest):
       ("differently shaped nodes", "nodes"),
       ("differently shaped globals", "globals"),)
   def test_incompatible_higher_rank_inputs_no_raise(self, field_to_reshape):
-    """A RelationNetwork does not make assumptions on its inputs shapes."""
+    """A RelationNetwork does not make assumption on its inputs shapes."""
     input_graph = self._get_shaped_input_graph()
     edge_model_fn, _, global_model_fn = self._get_shaped_model_fns()
     input_graph = input_graph.map(
@@ -911,14 +890,14 @@ class DeepSetsTest(GraphModuleTest):
     self.assertAllEqual(input_graph.receivers, output_graph.receivers)
     self.assertAllEqual(input_graph.senders, output_graph.senders)
 
-    with tf.Session() as sess:
+    with self.test_session() as sess:
       sess.run(tf.global_variables_initializer())
       (output_nodes_, output_globals_, expected_nodes_,
        expected_globals_) = sess.run(
            [output_nodes, output_globals, expected_nodes, expected_globals])
 
-    self._assert_all_none_or_all_close(expected_nodes_, output_nodes_)
-    self._assert_all_none_or_all_close(expected_globals_, output_globals_)
+    self.assertAllEqual(expected_nodes_, output_nodes_)
+    self.assertAllEqual(expected_globals_, output_globals_)
 
   @parameterized.parameters(
       ("nodes",), ("globals",),
@@ -952,7 +931,7 @@ class DeepSetsTest(GraphModuleTest):
     self._assert_build_and_run(network, input_graph)
 
   def test_incompatible_higher_rank_inputs_no_raise(self):
-    """A DeepSets does not make assumptions on the shape if its input edges."""
+    """A DeepSets does not make assumption on the shape if its input edges."""
     input_graph = self._get_shaped_input_graph()
     _, node_model_fn, global_model_fn = self._get_shaped_model_fns()
     input_graph = input_graph.replace(
@@ -1049,13 +1028,12 @@ class CommNetTest(GraphModuleTest):
     self.assertAllEqual(input_graph.receivers, output_graph.receivers,)
     self.assertAllEqual(input_graph.senders, output_graph.senders)
 
-    with tf.Session() as sess:
+    with self.test_session() as sess:
       sess.run(tf.global_variables_initializer())
       actual_nodes_output, expected_nodes_output = sess.run(
           [output_nodes, expected_nodes])
 
-    self._assert_all_none_or_all_close(expected_nodes_output,
-                                       actual_nodes_output)
+    self.assertAllEqual(expected_nodes_output, actual_nodes_output)
 
   @parameterized.named_parameters(
       ("no nodes", ["nodes"],), ("no edges", ["edges", "receivers", "senders"],)
@@ -1113,7 +1091,7 @@ class SelfAttentionTest(GraphModuleTest):
     actual_softmax = modules._unsorted_segment_softmax(
         data, segment_ids, num_segments)
 
-    with tf.Session() as sess:
+    with self.test_session() as sess:
       actual_softmax_output = sess.run(actual_softmax)
 
     self.assertAllClose(expected_softmax, actual_softmax_output)
@@ -1137,7 +1115,7 @@ class SelfAttentionTest(GraphModuleTest):
     actual_normalized_edges = modules._received_edges_normalizer(
         graph, normalizer)
 
-    with tf.Session() as sess:
+    with self.test_session() as sess:
       actual_normalized_edges_output = sess.run(actual_normalized_edges)
 
     self.assertAllClose(expected_normalized, actual_normalized_edges_output)
@@ -1184,7 +1162,7 @@ class SelfAttentionTest(GraphModuleTest):
     output_graph = self_attention(values, keys, queries, attention_graph)
     mixed_nodes = output_graph.nodes
 
-    with tf.Session() as sess:
+    with self.test_session() as sess:
       mixed_nodes_output = sess.run(mixed_nodes)
 
     expected_mixed_nodes = [

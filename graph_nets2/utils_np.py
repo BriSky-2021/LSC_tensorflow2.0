@@ -54,6 +54,17 @@ SENDERS = graphs.SENDERS
 GLOBALS = graphs.GLOBALS
 N_NODE = graphs.N_NODE
 N_EDGE = graphs.N_EDGE
+N_HEDGE=graphs.N_HEDGE
+
+LEDGES = graphs.LEDGES
+LRECEIVERS = graphs.LRECEIVERS
+LSENDERS = graphs.LSENDERS
+LNODES=graphs.LNODES
+
+HEDGES = graphs.HEDGES
+HRECEIVERS = graphs.HRECEIVERS
+HSENDERS = graphs.HSENDERS
+HNODES = graphs.HNODES
 
 GRAPH_DATA_FIELDS = graphs.GRAPH_DATA_FIELDS
 GRAPH_NUMBER_FIELDS = graphs.GRAPH_NUMBER_FIELDS
@@ -103,17 +114,6 @@ def _compute_stacked_offsets(sizes, repeats):
   return np.repeat(np.cumsum(np.hstack([0, sizes[:-1]])), repeats)
 
 
-def _check_key(node_index, key):
-  if node_index != key:
-    raise ValueError(
-        "Nodes of the networkx.OrderedMultiDiGraph must have sequential "
-        "integer keys consistent with the order of the nodes (e.g. "
-        "`list(graph_nx.nodes)[i] == i`), found node with index {} and key {}"
-        .format(node_index, key))
-
-  return True
-
-
 def networkx_to_data_dict(graph_nx,
                           node_shape_hint=None,
                           edge_shape_hint=None,
@@ -138,9 +138,7 @@ def networkx_to_data_dict(graph_nx,
     NODES, EDGES, RECEIVERS, SENDERS, GLOBALS, N_NODE, N_EDGE.
 
   Args:
-    graph_nx: A `networkx.OrderedMultiDiGraph`. The node keys must be sequential
-      integer values following the order in which nodes are added to the graph
-      starting from zero. That is `list(graph_nx.nodes)[i] == i`.
+    graph_nx: A `networkx.OrderedMultiDiGraph`.
     node_shape_hint: (iterable of `int` or `None`, default=`None`) If the graph
       does not contain nodes, the trailing shape for the created `NODES` field.
       If `None` (the default), this field is left `None`. This is not used if
@@ -165,35 +163,33 @@ def networkx_to_data_dict(graph_nx,
       attribute; or if `graph_nx` contains at least one edge with a `None`
       "features" attribute and one least one edge with a non-`None` "features"
       attribute.
-    ValueError: If the nodes have keys that are not consistent with the order
-      of the nodes.
   """
   nodes = None
   try:
     number_of_nodes = graph_nx.number_of_nodes()
-  except ValueError as e:
+  except ValueError:
     raise TypeError("Argument `graph_nx` of wrong type {}".format(
-        type(graph_nx))) from e
+        type(graph_nx)))
   if number_of_nodes == 0:
     if node_shape_hint is not None:
       nodes = np.zeros([0] + list(node_shape_hint), dtype=data_type_hint)
   else:
     try:
       nodes_data = [
-          data[GRAPH_NX_FEATURES_KEY]
-          for node_i, (key, data) in enumerate(graph_nx.nodes(data=True))
-          if _check_key(node_i, key) and data[GRAPH_NX_FEATURES_KEY] is not None
+          x[1][GRAPH_NX_FEATURES_KEY]
+          for x in graph_nx.nodes(data=True)
+          if x[1][GRAPH_NX_FEATURES_KEY] is not None
       ]
       if nodes_data:
         if len(nodes_data) != number_of_nodes:
           raise ValueError(
               "Either all the nodes should have features, or none of them")
         nodes = np.array(nodes_data)
-    except KeyError as e:
-      raise KeyError("Missing 'features' field from the graph nodes. "
+    except KeyError:
+      raise KeyError("Missing 'node' field from the graph nodes. "
                      "This could be due to the node having been silently added "
                      "as a consequence of an edge addition when creating the "
-                     "networkx instance") from e
+                     "networkx instance")
 
   edges = None
   number_of_edges = graph_nx.number_of_edges()
@@ -267,8 +263,7 @@ def data_dict_to_networkx(data_dict):
     data_dict: A graph `dict` of Numpy data.
 
   Returns:
-    The `networkx.OrderedMultiDiGraph`. The node keys will be the data_dict
-    integer node indices.
+    The `networkx.OrderedMultiDiGraph`.
 
   Raises:
     ValueError: If the `NODES` field of `data_dict` contains `None`, and
@@ -328,10 +323,7 @@ def networkxs_to_graphs_tuple(graph_nxs,
     NODES, EDGES, RECEIVERS, SENDERS, GLOBALS, N_NODE, N_EDGE.
 
   Args:
-    graph_nxs: A container of `networkx.OrderedMultiDiGraph`s. The node keys
-      must be sequential integer values following the order in which nodes are
-      added to the graph starting from zero. That is
-      `list(graph_nx.nodes)[i] == i`.
+    graph_nxs: A container of `networkx.OrderedMultiDiGraph`s.
     node_shape_hint: (iterable of `int` or `None`, default=`None`) If the graph
       does not contain nodes, the trailing shape for the created `NODES` field.
       If `None` (the default), this field is left `None`. This is not used if
@@ -355,9 +347,9 @@ def networkxs_to_graphs_tuple(graph_nxs,
       data_dict = networkx_to_data_dict(graph_nx, node_shape_hint,
                                         edge_shape_hint, data_type_hint)
       data_dicts.append(data_dict)
-  except TypeError as e:
+  except TypeError:
     raise ValueError("Could not convert some elements of `graph_nxs`. "
-                     "Did you pass an iterable of networkx instances?") from e
+                     "Did you pass an iterable of networkx instances?")
 
   return data_dicts_to_graphs_tuple(data_dicts)
 
@@ -369,8 +361,7 @@ def graphs_tuple_to_networkxs(graphs_tuple):
     graphs_tuple: A `graphs.GraphsTuple` instance containing numpy arrays.
 
   Returns:
-    The list of `networkx.OrderedMultiDiGraph`s. The node keys will be the data
-    dict integer node indices.
+    The list of `networkx.OrderedMultiDiGraph`s.
   """
   return [
       data_dict_to_networkx(x) for x in graphs_tuple_to_data_dicts(graphs_tuple)
@@ -466,7 +457,7 @@ def _to_compatible_data_dicts(data_dicts):
       if v is None:
         result[k] = None
       else:
-        dtype = np.int32 if k in [SENDERS, RECEIVERS, N_NODE, N_EDGE] else None
+        dtype = np.int32 if k in [SENDERS, RECEIVERS, LSENDERS,LRECEIVERS,HSENDERS,HRECEIVERS,N_NODE, N_EDGE,N_HEDGE] else None
         result[k] = np.asarray(v, dtype)
     results.append(result)
   return results
@@ -487,7 +478,7 @@ def _populate_number_fields(data_dict):
     The data `dict` with number fields.
   """
   dct = data_dict.copy()
-  for number_field, data_field in [[N_NODE, NODES], [N_EDGE, RECEIVERS]]:
+  for number_field, data_field in [[N_NODE, NODES], [N_EDGE, RECEIVERS],[N_HEDGE,HRECEIVERS]]:
     if dct.get(number_field) is None:
       if dct[data_field] is not None:
         dct[number_field] = np.array(
@@ -534,7 +525,6 @@ def _concatenate_data_dicts(data_dicts):
                                       concatenated_dicts[N_EDGE])
     for field in (RECEIVERS, SENDERS):
       concatenated_dicts[field] += offset
-
   return concatenated_dicts
 
 

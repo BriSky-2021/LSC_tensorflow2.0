@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-
-"""Tests for blocks.py."""
+"""Tests for blocks.py in Tensorflow 2."""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -23,12 +22,14 @@ import functools
 
 from absl.testing import parameterized
 from graph_nets import blocks
+
 from graph_nets import graphs
 from graph_nets import utils_np
 from graph_nets import utils_tf
 import numpy as np
 import sonnet as snt
 import tensorflow as tf
+
 
 
 
@@ -70,7 +71,7 @@ class GraphModuleTest(tf.test.TestCase, parameterized.TestCase):
 
   def setUp(self):
     super(GraphModuleTest, self).setUp()
-    tf.set_random_seed(0)
+    tf.random.set_seed(0)
 
   def _get_input_graph(self, none_fields=None):
     if none_fields is None:
@@ -93,11 +94,7 @@ class GraphModuleTest(tf.test.TestCase, parameterized.TestCase):
 
   def _assert_build_and_run(self, network, input_graph):
     # No error at construction time.
-    output = network(input_graph)
-    # No error at runtime.
-    with tf.Session() as sess:
-      sess.run(tf.global_variables_initializer())
-      sess.run(output)
+    _ = network(input_graph)
 
 
 BROADCAST_GLOBAL_TO_EDGES = [
@@ -145,9 +142,7 @@ class BroadcastersTest(GraphModuleTest):
     """Test the broadcasted output value."""
     input_graph = utils_tf.data_dicts_to_graphs_tuple(
         [SMALL_GRAPH_1, SMALL_GRAPH_2])
-    broadcasted = broadcaster(input_graph)
-    with tf.Session() as sess:
-      broadcasted_out = sess.run(broadcasted)
+    broadcasted_out = broadcaster(input_graph)
     self.assertNDArrayNear(
         np.array(expected, dtype=np.float32), broadcasted_out, err=1e-4)
 
@@ -167,9 +162,7 @@ class BroadcastersTest(GraphModuleTest):
         [SMALL_GRAPH_1, SMALL_GRAPH_2])
     input_graph = input_graph.map(
         lambda v: tf.reshape(v, [v.get_shape().as_list()[0]] + [2, -1]))
-    broadcasted = broadcaster(input_graph)
-    with tf.Session() as sess:
-      broadcasted_out = sess.run(broadcasted)
+    broadcasted_out = broadcaster(input_graph)
     self.assertNDArrayNear(
         np.reshape(np.array(expected, dtype=np.float32),
                    [len(expected)] + [2, -1]),
@@ -192,7 +185,7 @@ class BroadcastersTest(GraphModuleTest):
   def test_missing_field_raises_exception(self, broadcaster, none_fields):
     """Test that an error is raised if a required field is `None`."""
     input_graph = self._get_input_graph(none_fields)
-    with self.assertRaisesRegexp(
+    with self.assertRaisesRegex(
         ValueError, "field cannot be None when broadcasting"):
       broadcaster(input_graph)
 
@@ -236,10 +229,7 @@ class ReducersTest(GraphModuleTest):
     input_values = tf.constant(input_values_np, dtype=tf.float32)
     num_groups = tf.constant(num_groups_np, dtype=tf.int32)
 
-    reduced = reducer(input_values, input_indices, num_groups)
-
-    with tf.Session() as sess:
-      reduced_out = sess.run(reduced)
+    reduced_out = reducer(input_values, input_indices, num_groups)
 
     self.assertNDArrayNear(
         np.array(expected_values, dtype=np.float32), reduced_out, err=1e-4)
@@ -294,47 +284,43 @@ class FieldAggregatorsTest(GraphModuleTest):
 
   @parameterized.named_parameters(
       ("edges_to_globals",
-       blocks.EdgesToGlobalsAggregator(tf.unsorted_segment_sum),
+       blocks.EdgesToGlobalsAggregator(tf.math.unsorted_segment_sum),
        SEGMENT_SUM_EDGES_TO_GLOBALS,),
       ("nodes_to_globals",
-       blocks.NodesToGlobalsAggregator(tf.unsorted_segment_sum),
+       blocks.NodesToGlobalsAggregator(tf.math.unsorted_segment_sum),
        SEGMENT_SUM_NODES_TO_GLOBALS,),
       ("sent_edges_to_nodes",
-       blocks.SentEdgesToNodesAggregator(tf.unsorted_segment_sum),
+       blocks.SentEdgesToNodesAggregator(tf.math.unsorted_segment_sum),
        SEGMENT_SUM_SENT_EDGES_TO_NODES,),
       ("received_edges_to_nodes",
-       blocks.ReceivedEdgesToNodesAggregator(tf.unsorted_segment_sum),
+       blocks.ReceivedEdgesToNodesAggregator(tf.math.unsorted_segment_sum),
        SEGMENT_SUM_RECEIVED_EDGES_TO_NODES),
   )
   def test_output_values(self, aggregator, expected):
     input_graph = self._get_input_graph()
-    aggregated = aggregator(input_graph)
-    with tf.Session() as sess:
-      aggregated_out = sess.run(aggregated)
+    aggregated_out = aggregator(input_graph)
     self.assertNDArrayNear(
         np.array(expected, dtype=np.float32), aggregated_out, err=1e-4)
 
   @parameterized.named_parameters(
       ("edges_to_globals",
-       blocks.EdgesToGlobalsAggregator(tf.unsorted_segment_sum),
+       blocks.EdgesToGlobalsAggregator(tf.math.unsorted_segment_sum),
        SEGMENT_SUM_EDGES_TO_GLOBALS,),
       ("nodes_to_globals",
-       blocks.NodesToGlobalsAggregator(tf.unsorted_segment_sum),
+       blocks.NodesToGlobalsAggregator(tf.math.unsorted_segment_sum),
        SEGMENT_SUM_NODES_TO_GLOBALS,),
       ("sent_edges_to_nodes",
-       blocks.SentEdgesToNodesAggregator(tf.unsorted_segment_sum),
+       blocks.SentEdgesToNodesAggregator(tf.math.unsorted_segment_sum),
        SEGMENT_SUM_SENT_EDGES_TO_NODES,),
       ("received_edges_to_nodes",
-       blocks.ReceivedEdgesToNodesAggregator(tf.unsorted_segment_sum),
+       blocks.ReceivedEdgesToNodesAggregator(tf.math.unsorted_segment_sum),
        SEGMENT_SUM_RECEIVED_EDGES_TO_NODES),
   )
   def test_output_values_larger_rank(self, aggregator, expected):
     input_graph = self._get_input_graph()
     input_graph = input_graph.map(
         lambda v: tf.reshape(v, [v.get_shape().as_list()[0]] + [2, -1]))
-    aggregated = aggregator(input_graph)
-    with tf.Session() as sess:
-      aggregated_out = sess.run(aggregated)
+    aggregated_out = aggregator(input_graph)
     self.assertNDArrayNear(
         np.reshape(np.array(expected, dtype=np.float32),
                    [len(expected)] + [2, -1]),
@@ -353,8 +339,8 @@ class FieldAggregatorsTest(GraphModuleTest):
   def test_missing_field_raises_exception(self, constructor, none_field):
     """Tests that aggregator fail if a required field is missing."""
     input_graph = self._get_input_graph([none_field])
-    with self.assertRaisesRegexp(ValueError, none_field):
-      constructor(tf.unsorted_segment_sum)(input_graph)
+    with self.assertRaisesRegex(ValueError, none_field):
+      constructor(tf.math.unsorted_segment_sum)(input_graph)
 
   @parameterized.named_parameters(
       ("received edges to nodes missing nodes and globals",
@@ -370,7 +356,7 @@ class FieldAggregatorsTest(GraphModuleTest):
   def test_unused_field_can_be_none(self, constructor, none_fields):
     """Tests that aggregator fail if a required field is missing."""
     input_graph = self._get_input_graph(none_fields)
-    constructor(tf.unsorted_segment_sum)(input_graph)
+    constructor(tf.math.unsorted_segment_sum)(input_graph)
 
 
 class EdgeBlockTest(GraphModuleTest):
@@ -379,6 +365,8 @@ class EdgeBlockTest(GraphModuleTest):
     super(EdgeBlockTest, self).setUp()
     self._scale = 10.
     self._edge_model_fn = lambda: lambda features: features * self._scale
+    model_args = lambda features, scale, offset: features * scale + offset
+    self._edge_model_args_fn = lambda: model_args
 
   @parameterized.named_parameters(
       ("all inputs", True, True, True, True),
@@ -399,7 +387,7 @@ class EdgeBlockTest(GraphModuleTest):
         use_receiver_nodes=use_receiver_nodes,
         use_sender_nodes=use_sender_nodes,
         use_globals=use_globals)
-    output_graph = edge_block(input_graph)
+    output_graph_out = edge_block(input_graph)
 
     model_inputs = []
     if use_edges:
@@ -412,16 +400,38 @@ class EdgeBlockTest(GraphModuleTest):
       model_inputs.append(blocks.broadcast_globals_to_edges(input_graph))
 
     model_inputs = tf.concat(model_inputs, axis=-1)
-    self.assertEqual(input_graph.nodes, output_graph.nodes)
-    self.assertEqual(input_graph.globals, output_graph.globals)
+    self.assertIs(input_graph.nodes, output_graph_out.nodes)
+    self.assertIs(input_graph.globals, output_graph_out.globals)
 
-    with tf.Session() as sess:
-      output_graph_out, model_inputs_out = sess.run(
-          (output_graph, model_inputs))
-
-    expected_output_edges = model_inputs_out * self._scale
+    expected_output_edges = model_inputs * self._scale
     self.assertNDArrayNear(
-        expected_output_edges, output_graph_out.edges, err=1e-4)
+        expected_output_edges.numpy(), output_graph_out.edges.numpy(), err=1e-4)
+
+  @parameterized.named_parameters(
+      ("only scaling", 2, 0),
+      ("only offsetting", 0, 2),
+      ("scaling and offsetting", 2, 2),
+      ("without scaling and offsetting", 1, 0),
+  )
+  def test_optional_arguments(self, scale, offset):
+    """Assesses the correctness of the EdgeBlock using arguments."""
+    input_graph = self._get_input_graph()
+    edge_block = blocks.EdgeBlock(edge_model_fn=self._edge_model_args_fn)
+    output_graph_out = edge_block(
+        input_graph, edge_model_kwargs=dict(scale=scale, offset=offset))
+
+    fixed_scale = scale
+    fixed_offset = offset
+    model_fn = lambda: lambda features: features * fixed_scale + fixed_offset
+    hardcoded_edge_block = blocks.EdgeBlock(edge_model_fn=model_fn)
+    expected_graph_out = hardcoded_edge_block(input_graph)
+
+    self.assertIs(expected_graph_out.nodes, output_graph_out.nodes)
+    self.assertIs(expected_graph_out.globals, output_graph_out.globals)
+    self.assertNDArrayNear(
+        expected_graph_out.edges.numpy(),
+        output_graph_out.edges.numpy(),
+        err=1e-4)
 
   @parameterized.named_parameters(
       ("all inputs", True, True, True, True, 12),
@@ -450,7 +460,7 @@ class EdgeBlockTest(GraphModuleTest):
         use_globals=use_globals)
     edge_block(input_graph)
 
-    variables = edge_block.get_variables()
+    variables = edge_block.variables
     var_shapes_dict = {var.name: var.get_shape().as_list() for var in variables}
     self.assertDictEqual(expected_var_shapes_dict, var_shapes_dict)
 
@@ -473,7 +483,7 @@ class EdgeBlockTest(GraphModuleTest):
         use_receiver_nodes=use_receiver_nodes,
         use_sender_nodes=use_sender_nodes,
         use_globals=use_globals)
-    with self.assertRaisesRegexp(ValueError, "field cannot be None"):
+    with self.assertRaisesRegex(ValueError, "field cannot be None"):
       edge_block(input_graph)
 
   def test_compatible_higher_rank_no_raise(self):
@@ -507,7 +517,8 @@ class EdgeBlockTest(GraphModuleTest):
         use_sender_nodes=use_sender_nodes,
         use_globals=use_globals
     )
-    with self.assertRaisesRegexp(ValueError, "in both shapes must be equal"):
+    with self.assertRaisesRegex(
+        tf.errors.InvalidArgumentError, "Dimensions of inputs should match"):
       network(input_graph)
 
   @parameterized.named_parameters(
@@ -561,19 +572,18 @@ class EdgeBlockTest(GraphModuleTest):
       model_inputs.append(blocks.broadcast_globals_to_edges(input_graph))
 
     model_inputs = tf.concat(model_inputs, axis=-1)
-    self.assertEqual(input_graph.nodes, output_graph.nodes)
-    self.assertEqual(input_graph.globals, output_graph.globals)
+    self.assertIs(input_graph.nodes, output_graph.nodes)
+    self.assertIs(input_graph.globals, output_graph.globals)
 
-    with tf.Session() as sess:
-      actual_edges, model_inputs_out = sess.run(
-          (output_graph.edges, model_inputs))
+    actual_edges = output_graph.edges.numpy()
+    model_inputs_out = model_inputs.numpy()
 
     expected_output_edges = model_inputs_out * self._scale
     self.assertNDArrayNear(expected_output_edges, actual_edges, err=1e-4)
 
   def test_no_input_raises_exception(self):
     """Checks that receiving no input raises an exception."""
-    with self.assertRaisesRegexp(ValueError, "At least one of "):
+    with self.assertRaisesRegex(ValueError, "At least one of "):
       blocks.EdgeBlock(
           edge_model_fn=self._edge_model_fn,
           use_edges=False,
@@ -588,21 +598,23 @@ class NodeBlockTest(GraphModuleTest):
     super(NodeBlockTest, self).setUp()
     self._scale = 10.
     self._node_model_fn = lambda: lambda features: features * self._scale
+    model_args = lambda features, scale, offset: features * scale + offset
+    self._node_model_args_fn = lambda: model_args
 
   @parameterized.named_parameters(
       ("all inputs, custom reductions", True, True, True, True,
-       tf.unsorted_segment_sum, tf.unsorted_segment_mean),
+       tf.math.unsorted_segment_sum, tf.math.unsorted_segment_mean),
       ("received edges only, blocks reducer",
        True, False, False, False, blocks.unsorted_segment_max_or_zero, None),
       ("sent edges only, custom reduction",
-       False, True, False, False, None, tf.unsorted_segment_prod),
+       False, True, False, False, None, tf.math.unsorted_segment_prod),
       ("nodes only",
        False, False, True, False, None, None),
       ("globals only",
        False, False, False, True, None, None),
       ("received edges and nodes, custom reductions",
        True, False, True, False,
-       blocks.unsorted_segment_min_or_zero, tf.unsorted_segment_prod),
+       blocks.unsorted_segment_min_or_zero, tf.math.unsorted_segment_prod),
       ("sent edges and globals, custom reduction",
        False, True, False, True, None, blocks.unsorted_segment_min_or_zero),
   )
@@ -635,16 +647,41 @@ class NodeBlockTest(GraphModuleTest):
       model_inputs.append(blocks.broadcast_globals_to_nodes(input_graph))
 
     model_inputs = tf.concat(model_inputs, axis=-1)
-    self.assertEqual(input_graph.edges, output_graph.edges)
-    self.assertEqual(input_graph.globals, output_graph.globals)
+    self.assertIs(input_graph.edges, output_graph.edges)
+    self.assertIs(input_graph.globals, output_graph.globals)
 
-    with tf.Session() as sess:
-      output_graph_out, model_inputs_out = sess.run(
-          (output_graph, model_inputs))
+    output_graph_out = utils_tf.nest_to_numpy(output_graph)
+    model_inputs_out = model_inputs
 
     expected_output_nodes = model_inputs_out * self._scale
     self.assertNDArrayNear(
         expected_output_nodes, output_graph_out.nodes, err=1e-4)
+
+  @parameterized.named_parameters(
+      ("only scaling", 2, 0),
+      ("only offsetting", 0, 2),
+      ("scaling and offsetting", 2, 2),
+      ("without scaling and offsetting", 1, 0),
+  )
+  def test_optional_arguments(self, scale, offset):
+    """Assesses the correctness of the NodeBlock using arguments."""
+    input_graph = self._get_input_graph()
+    node_block = blocks.NodeBlock(node_model_fn=self._node_model_args_fn)
+    output_graph_out = node_block(
+        input_graph, node_model_kwargs=dict(scale=scale, offset=offset))
+
+    fixed_scale = scale
+    fixed_offset = offset
+    model_fn = lambda: lambda features: features * fixed_scale + fixed_offset
+    hardcoded_node_block = blocks.NodeBlock(node_model_fn=model_fn)
+    expected_graph_out = hardcoded_node_block(input_graph)
+
+    self.assertIs(expected_graph_out.edges, output_graph_out.edges)
+    self.assertIs(expected_graph_out.globals, output_graph_out.globals)
+    self.assertNDArrayNear(
+        expected_graph_out.nodes.numpy(),
+        output_graph_out.nodes.numpy(),
+        err=1e-4)
 
   @parameterized.named_parameters(
       ("all inputs", True, True, True, True, 14),
@@ -674,7 +711,7 @@ class NodeBlockTest(GraphModuleTest):
 
     node_block(input_graph)
 
-    variables = node_block.get_variables()
+    variables = node_block.variables
     var_shapes_dict = {var.name: var.get_shape().as_list() for var in variables}
     self.assertDictEqual(expected_var_shapes_dict, var_shapes_dict)
 
@@ -697,18 +734,20 @@ class NodeBlockTest(GraphModuleTest):
         use_sent_edges=use_sent_edges,
         use_nodes=use_nodes,
         use_globals=use_globals)
-    with self.assertRaisesRegexp(ValueError, "field cannot be None"):
+    with self.assertRaisesRegex(ValueError, "field cannot be None"):
       node_block(input_graph)
 
   @parameterized.named_parameters(
-      ("no received edges reducer", True, False, None, tf.unsorted_segment_sum),
-      ("no sent edges reducer", False, True, tf.unsorted_segment_sum, None),
+      ("no received edges reducer", True, False, None,
+       tf.math.unsorted_segment_sum),
+      ("no sent edges reducer", False, True, tf.math.unsorted_segment_sum,
+       None),
   )
   def test_missing_aggregation_raises_exception(
       self, use_received_edges, use_sent_edges,
       received_edges_reducer, sent_edges_reducer):
     """Checks that missing a required aggregation argument raises an error."""
-    with self.assertRaisesRegexp(ValueError, "should not be None"):
+    with self.assertRaisesRegex(ValueError, "should not be None"):
       blocks.NodeBlock(
           node_model_fn=self._node_model_fn,
           use_received_edges=use_received_edges,
@@ -749,7 +788,9 @@ class NodeBlockTest(GraphModuleTest):
         use_nodes=use_nodes,
         use_globals=use_globals
     )
-    with self.assertRaisesRegexp(ValueError, "in both shapes must be equal"):
+    with self.assertRaisesRegex(
+        tf.errors.InvalidArgumentError,
+        "Dimensions of inputs should match"):
       network(input_graph)
 
   @parameterized.named_parameters(
@@ -797,29 +838,28 @@ class NodeBlockTest(GraphModuleTest):
     if use_edges:
       model_inputs.append(
           blocks.ReceivedEdgesToNodesAggregator(
-              tf.unsorted_segment_sum)(input_graph))
+              tf.math.unsorted_segment_sum)(input_graph))
       model_inputs.append(
           blocks.SentEdgesToNodesAggregator(
-              tf.unsorted_segment_sum)(input_graph))
+              tf.math.unsorted_segment_sum)(input_graph))
     if use_nodes:
       model_inputs.append(input_graph.nodes)
     if use_globals:
       model_inputs.append(blocks.broadcast_globals_to_nodes(input_graph))
 
     model_inputs = tf.concat(model_inputs, axis=-1)
-    self.assertEqual(input_graph.edges, output_graph.edges)
-    self.assertEqual(input_graph.globals, output_graph.globals)
+    self.assertIs(input_graph.edges, output_graph.edges)
+    self.assertIs(input_graph.globals, output_graph.globals)
 
-    with tf.Session() as sess:
-      actual_nodes, model_inputs_out = sess.run(
-          (output_graph.nodes, model_inputs))
+    actual_nodes = output_graph.nodes.numpy()
+    model_inputs_out = model_inputs.numpy()
 
     expected_output_nodes = model_inputs_out * self._scale
     self.assertNDArrayNear(expected_output_nodes, actual_nodes, err=1e-4)
 
   def test_no_input_raises_exception(self):
     """Checks that receiving no input raises an exception."""
-    with self.assertRaisesRegexp(ValueError, "At least one of "):
+    with self.assertRaisesRegex(ValueError, "At least one of "):
       blocks.NodeBlock(
           node_model_fn=self._node_model_fn,
           use_received_edges=False,
@@ -835,19 +875,22 @@ class GlobalBlockTest(GraphModuleTest):
     super(GlobalBlockTest, self).setUp()
     self._scale = 10.
     self._global_model_fn = lambda: lambda features: features * self._scale
+    model_args = lambda features, scale, offset: features * scale + offset
+    self._global_model_args_fn = lambda: model_args
 
   @parameterized.named_parameters(
       ("all_inputs, custom reductions",
-       True, True, True, tf.unsorted_segment_sum, tf.unsorted_segment_mean),
+       True, True, True, tf.math.unsorted_segment_sum,
+       tf.math.unsorted_segment_mean),
       ("edges only, blocks reducer",
        True, False, False, blocks.unsorted_segment_max_or_zero, None),
       ("nodes only, custom reduction",
-       False, True, False, None, tf.unsorted_segment_prod),
+       False, True, False, None, tf.math.unsorted_segment_prod),
       ("globals only",
        False, False, True, None, None),
       ("edges and nodes, blocks reducer",
        True, True, False, blocks.unsorted_segment_min_or_zero,
-       tf.unsorted_segment_prod),
+       tf.math.unsorted_segment_prod),
       ("nodes and globals, blocks reducer",
        False, True, True, None, blocks.unsorted_segment_min_or_zero),
   )
@@ -875,16 +918,42 @@ class GlobalBlockTest(GraphModuleTest):
       model_inputs.append(input_graph.globals)
 
     model_inputs = tf.concat(model_inputs, axis=-1)
-    self.assertEqual(input_graph.edges, output_graph.edges)
-    self.assertEqual(input_graph.nodes, output_graph.nodes)
+    self.assertIs(input_graph.edges, output_graph.edges)
+    self.assertIs(input_graph.nodes, output_graph.nodes)
 
-    with tf.Session() as sess:
-      output_graph_out, model_inputs_out = sess.run(
-          (output_graph, model_inputs))
+    output_graph_out = utils_tf.nest_to_numpy(output_graph)
+    model_inputs_out = model_inputs
 
     expected_output_globals = model_inputs_out * self._scale
     self.assertNDArrayNear(
         expected_output_globals, output_graph_out.globals, err=1e-4)
+
+  @parameterized.named_parameters(
+      ("only scaling", 2, 0),
+      ("only offsetting", 0, 2),
+      ("scaling and offsetting", 2, 2),
+      ("without scaling and offsetting", 1, 0),
+  )
+  def test_optional_arguments(self, scale, offset):
+    """Assesses the correctness of the GlobalBlock using arguments."""
+    input_graph = self._get_input_graph()
+    global_block = blocks.GlobalBlock(
+        global_model_fn=self._global_model_args_fn)
+    output_graph_out = global_block(
+        input_graph, global_model_kwargs=dict(scale=scale, offset=offset))
+
+    fixed_scale = scale
+    fixed_offset = offset
+    model_fn = lambda: lambda features: features * fixed_scale + fixed_offset
+    hardcoded_global_block = blocks.GlobalBlock(global_model_fn=model_fn)
+    expected_graph_out = hardcoded_global_block(input_graph)
+
+    self.assertIs(expected_graph_out.edges, output_graph_out.edges)
+    self.assertIs(expected_graph_out.nodes, output_graph_out.nodes)
+    self.assertNDArrayNear(
+        expected_graph_out.globals.numpy(),
+        output_graph_out.globals.numpy(),
+        err=1e-4)
 
   @parameterized.named_parameters(
       ("default", True, True, True, 10),
@@ -911,7 +980,7 @@ class GlobalBlockTest(GraphModuleTest):
 
     global_block(input_graph)
 
-    variables = global_block.get_variables()
+    variables = global_block.variables
     var_shapes_dict = {var.name: var.get_shape().as_list() for var in variables}
     self.assertDictEqual(expected_var_shapes_dict, var_shapes_dict)
 
@@ -929,7 +998,7 @@ class GlobalBlockTest(GraphModuleTest):
         use_edges=use_edges,
         use_nodes=use_nodes,
         use_globals=use_globals)
-    with self.assertRaisesRegexp(ValueError, "field cannot be None"):
+    with self.assertRaisesRegex(ValueError, "field cannot be None"):
       global_block(input_graph)
 
   @parameterized.named_parameters(
@@ -951,20 +1020,21 @@ class GlobalBlockTest(GraphModuleTest):
     model_inputs = []
     if use_edges:
       model_inputs.append(
-          blocks.EdgesToGlobalsAggregator(tf.unsorted_segment_sum)(input_graph))
+          blocks.EdgesToGlobalsAggregator(
+              tf.math.unsorted_segment_sum)(input_graph))
     if use_nodes:
       model_inputs.append(
-          blocks.NodesToGlobalsAggregator(tf.unsorted_segment_sum)(input_graph))
+          blocks.NodesToGlobalsAggregator(
+              tf.math.unsorted_segment_sum)(input_graph))
     if use_globals:
       model_inputs.append(input_graph.globals)
 
     model_inputs = tf.concat(model_inputs, axis=-1)
-    self.assertEqual(input_graph.edges, output_graph.edges)
-    self.assertEqual(input_graph.nodes, output_graph.nodes)
+    self.assertIs(input_graph.edges, output_graph.edges)
+    self.assertIs(input_graph.nodes, output_graph.nodes)
 
-    with tf.Session() as sess:
-      actual_globals, model_inputs_out = sess.run(
-          (output_graph.globals, model_inputs))
+    actual_globals = output_graph.globals.numpy()
+    model_inputs_out = model_inputs
 
     expected_output_globals = model_inputs_out * self._scale
     self.assertNDArrayNear(expected_output_globals, actual_globals, err=1e-4)
@@ -997,7 +1067,9 @@ class GlobalBlockTest(GraphModuleTest):
         use_nodes=use_nodes,
         use_globals=use_globals
     )
-    with self.assertRaisesRegexp(ValueError, "in both shapes must be equal"):
+    with self.assertRaisesRegex(
+        tf.errors.InvalidArgumentError,
+        "Dimensions of inputs should match"):
       network(input_graph)
 
   @parameterized.named_parameters(
@@ -1024,7 +1096,7 @@ class GlobalBlockTest(GraphModuleTest):
 
   def test_no_input_raises_exception(self):
     """Checks that receiving no input raises an exception."""
-    with self.assertRaisesRegexp(ValueError, "At least one of "):
+    with self.assertRaisesRegex(ValueError, "At least one of "):
       blocks.GlobalBlock(
           global_model_fn=self._global_model_fn,
           use_edges=False,
@@ -1032,14 +1104,16 @@ class GlobalBlockTest(GraphModuleTest):
           use_globals=False)
 
   @parameterized.named_parameters(
-      ("missing edges reducer", True, False, None, tf.unsorted_segment_sum),
-      ("missing nodes reducer", False, True, tf.unsorted_segment_sum, None),
+      ("missing edges reducer", True, False, None,
+       tf.math.unsorted_segment_sum),
+      ("missing nodes reducer", False, True, tf.math.unsorted_segment_sum,
+       None),
   )
   def test_missing_aggregation_raises_exception(
       self, use_edges, use_nodes, edges_reducer,
       nodes_reducer):
     """Checks that missing a required aggregation argument raises an error."""
-    with self.assertRaisesRegexp(ValueError, "should not be None"):
+    with self.assertRaisesRegex(ValueError, "should not be None"):
       blocks.GlobalBlock(
           global_model_fn=self._global_model_fn,
           use_edges=use_edges,
@@ -1047,11 +1121,6 @@ class GlobalBlockTest(GraphModuleTest):
           use_globals=False,
           edges_reducer=edges_reducer,
           nodes_reducer=nodes_reducer)
-
-
-def _mask_leading_dimension(tensor):
-  return tf.placeholder_with_default(tensor,
-                                     [None] + tensor.get_shape().as_list()[1:])
 
 
 class CommonBlockTests(GraphModuleTest):
@@ -1064,17 +1133,16 @@ class CommonBlockTests(GraphModuleTest):
   )
   def test_dynamic_batch_sizes(self, block_constructor):
     """Checks that all batch sizes are as expected through a GraphNetwork."""
-    input_graph = self._get_input_graph()
-    placeholders = input_graph.map(_mask_leading_dimension, graphs.ALL_FIELDS)
+    # Remove all placeholders from here, these are unnecessary in tf2.
+    input_graph = utils_np.data_dicts_to_graphs_tuple(
+        [SMALL_GRAPH_1, SMALL_GRAPH_2])
+    input_graph = input_graph.map(tf.constant, fields=graphs.ALL_FIELDS)
     model = block_constructor(
         functools.partial(snt.nets.MLP, output_sizes=[10]))
-    output = model(placeholders)
-    with tf.Session() as sess:
-      sess.run(tf.global_variables_initializer())
-      other_input_graph = utils_np.data_dicts_to_graphs_tuple(
-          [SMALL_GRAPH_1, SMALL_GRAPH_2])
-      actual = sess.run(output, {placeholders: other_input_graph})
-    for k, v in other_input_graph._asdict().items():
+    output = model(input_graph)
+    actual = utils_tf.nest_to_numpy(output)
+
+    for k, v in input_graph._asdict().items():
       self.assertEqual(v.shape[0], getattr(actual, k).shape[0])
 
   @parameterized.named_parameters(

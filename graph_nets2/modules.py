@@ -50,8 +50,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from graph_nets import _base
 from graph_nets import blocks
+import sonnet as snt
 import tensorflow as tf
 
 _DEFAULT_EDGE_BLOCK_OPT = {
@@ -75,7 +75,7 @@ _DEFAULT_GLOBAL_BLOCK_OPT = {
 }
 
 
-class InteractionNetwork(_base.AbstractModule):
+class InteractionNetwork(snt.AbstractModule):
   """Implementation of an Interaction Network.
 
   An interaction networks computes interactions on the edges based on the
@@ -90,7 +90,7 @@ class InteractionNetwork(_base.AbstractModule):
   def __init__(self,
                edge_model_fn,
                node_model_fn,
-               reducer=tf.math.unsorted_segment_sum,
+               reducer=tf.unsorted_segment_sum,
                name="interaction_network"):
     """Initializes the InteractionNetwork module.
 
@@ -104,7 +104,7 @@ class InteractionNetwork(_base.AbstractModule):
         per-node computations. The callable must return a Sonnet module (or
         equivalent; see `blocks.NodeBlock` for details).
       reducer: Reducer to be used by NodeBlock to aggregate edges. Defaults to
-        tf.math.unsorted_segment_sum.
+        tf.unsorted_segment_sum.
       name: The module name.
     """
     super(InteractionNetwork, self).__init__(name=name)
@@ -118,10 +118,7 @@ class InteractionNetwork(_base.AbstractModule):
           use_globals=False,
           received_edges_reducer=reducer)
 
-  def _build(self,
-             graph,
-             edge_model_kwargs=None,
-             node_model_kwargs=None):
+  def _build(self, graph):
     """Connects the InterationNetwork.
 
     Args:
@@ -129,10 +126,6 @@ class InteractionNetwork(_base.AbstractModule):
         `None`. The features of each node and edge of `graph` must be
         concatenable on the last axis (i.e., the shapes of `graph.nodes` and
         `graph.edges` must match but for their first and last axis).
-      edge_model_kwargs: Optional keyword arguments to pass to
-        the edge block model.
-      node_model_kwargs: Optional keyword arguments to pass to
-        the node block model.
 
     Returns:
       An output `graphs.GraphsTuple` with updated edges and nodes.
@@ -141,11 +134,10 @@ class InteractionNetwork(_base.AbstractModule):
       ValueError: If any of `graph.nodes`, `graph.edges`, `graph.receivers` or
         `graph.senders` is `None`.
     """
-    return self._node_block(
-        self._edge_block(graph, edge_model_kwargs), node_model_kwargs)
+    return self._node_block(self._edge_block(graph))
 
 
-class RelationNetwork(_base.AbstractModule):
+class RelationNetwork(snt.AbstractModule):
   """Implementation of a Relation Network.
 
   See https://arxiv.org/abs/1706.01427 for more details.
@@ -158,7 +150,7 @@ class RelationNetwork(_base.AbstractModule):
   def __init__(self,
                edge_model_fn,
                global_model_fn,
-               reducer=tf.math.unsorted_segment_sum,
+               reducer=tf.unsorted_segment_sum,
                name="relation_network"):
     """Initializes the RelationNetwork module.
 
@@ -170,7 +162,7 @@ class RelationNetwork(_base.AbstractModule):
         per-global computations. The callable must return a Sonnet module (or
         equivalent; see GlobalBlock for details).
       reducer: Reducer to be used by GlobalBlock to aggregate edges. Defaults to
-        tf.math.unsorted_segment_sum.
+        tf.unsorted_segment_sum.
       name: The module name.
     """
     super(RelationNetwork, self).__init__(name=name)
@@ -190,19 +182,12 @@ class RelationNetwork(_base.AbstractModule):
           use_globals=False,
           edges_reducer=reducer)
 
-  def _build(self,
-             graph,
-             edge_model_kwargs=None,
-             global_model_kwargs=None):
+  def _build(self, graph):
     """Connects the RelationNetwork.
 
     Args:
       graph: A `graphs.GraphsTuple` containing `Tensor`s, except for the edges
         and global properties which may be `None`.
-      edge_model_kwargs: Optional keyword arguments to pass to
-        the edge block model.
-      global_model_kwargs: Optional keyword arguments to pass to
-        the global block model.
 
     Returns:
       A `graphs.GraphsTuple` with updated globals.
@@ -211,8 +196,7 @@ class RelationNetwork(_base.AbstractModule):
       ValueError: If any of `graph.nodes`, `graph.receivers` or `graph.senders`
         is `None`.
     """
-    output_graph = self._global_block(
-        self._edge_block(graph, edge_model_kwargs), global_model_kwargs)
+    output_graph = self._global_block(self._edge_block(graph))
     return graph.replace(globals=output_graph.globals)
 
 
@@ -244,7 +228,7 @@ def _make_default_global_block_opt(global_block_opt, default_reducer):
   return global_block_opt
 
 
-class GraphNetwork(_base.AbstractModule):
+class GraphNetwork(snt.AbstractModule):
   """Implementation of a Graph Network.
 
   See https://arxiv.org/abs/1806.01261 for more details.
@@ -254,7 +238,7 @@ class GraphNetwork(_base.AbstractModule):
                edge_model_fn,
                node_model_fn,
                global_model_fn,
-               reducer=tf.math.unsorted_segment_sum,
+               reducer=tf.unsorted_segment_sum,
                edge_block_opt=None,
                node_block_opt=None,
                global_block_opt=None,
@@ -272,15 +256,15 @@ class GraphNetwork(_base.AbstractModule):
         per-global computations. The callable must return a Sonnet module (or
         equivalent; see GlobalBlock for details).
       reducer: Reducer to be used by NodeBlock and GlobalBlock to aggregate
-        nodes and edges. Defaults to tf.math.unsorted_segment_sum. This will be
+        nodes and edges. Defaults to tf.unsorted_segment_sum. This will be
         overridden by the reducers specified in `node_block_opt` and
         `global_block_opt`, if any.
       edge_block_opt: Additional options to be passed to the EdgeBlock. Can
         contain keys `use_edges`, `use_receiver_nodes`, `use_sender_nodes`,
         `use_globals`. By default, these are all True.
       node_block_opt: Additional options to be passed to the NodeBlock. Can
-        contain the keys `use_received_edges`, `use_nodes`, `use_globals` (all
-        set to True by default), `use_sent_edges` (defaults to False), and
+        contain the keys `use_received_edges`, `use_sent_edges`, `use_nodes`,
+        `use_globals` (all set to True by default), and
         `received_edges_reducer`, `sent_edges_reducer` (default to `reducer`).
       global_block_opt: Additional options to be passed to the GlobalBlock. Can
         contain the keys `use_edges`, `use_nodes`, `use_globals` (all set to
@@ -301,11 +285,7 @@ class GraphNetwork(_base.AbstractModule):
       self._global_block = blocks.GlobalBlock(
           global_model_fn=global_model_fn, **global_block_opt)
 
-  def _build(self,
-             graph,
-             edge_model_kwargs=None,
-             node_model_kwargs=None,
-             global_model_kwargs=None):
+  def _build(self, graph):
     """Connects the GraphNetwork.
 
     Args:
@@ -314,22 +294,14 @@ class GraphNetwork(_base.AbstractModule):
         configuration, no `None` field is allowed. Moreover, when using the
         default configuration, the features of each nodes, edges and globals of
         `graph` should be concatenable on the last dimension.
-      edge_model_kwargs: Optional keyword arguments to pass to
-        the edge block model.
-      node_model_kwargs: Optional keyword arguments to pass to
-        the node block model.
-      global_model_kwargs: Optional keyword arguments to pass to
-        the global block model.
 
     Returns:
       An output `graphs.GraphsTuple` with updated edges, nodes and globals.
     """
-    node_input = self._edge_block(graph, edge_model_kwargs)
-    global_input = self._node_block(node_input, node_model_kwargs)
-    return self._global_block(global_input, global_model_kwargs)
+    return self._global_block(self._node_block(self._edge_block(graph)))
 
 
-class GraphIndependent(_base.AbstractModule):
+class GraphIndependent(snt.AbstractModule):
   """A graph block that applies models to the graph elements independently.
 
   The inputs and outputs are graphs. The corresponding models are applied to
@@ -366,52 +338,37 @@ class GraphIndependent(_base.AbstractModule):
       if edge_model_fn is None:
         self._edge_model = lambda x: x
       else:
-        self._edge_model = _base.WrappedModelFnModule(
-            edge_model_fn, name="edge_model")
+        self._edge_model = snt.Module(
+            lambda x: edge_model_fn()(x), name="edge_model")  # pylint: disable=unnecessary-lambda
       if node_model_fn is None:
         self._node_model = lambda x: x
       else:
-        self._node_model = _base.WrappedModelFnModule(
-            node_model_fn, name="node_model")
+        self._node_model = snt.Module(
+            lambda x: node_model_fn()(x), name="node_model")  # pylint: disable=unnecessary-lambda
       if global_model_fn is None:
         self._global_model = lambda x: x
       else:
-        self._global_model = _base.WrappedModelFnModule(
-            global_model_fn, name="global_model")
+        self._global_model = snt.Module(
+            lambda x: global_model_fn()(x), name="global_model")  # pylint: disable=unnecessary-lambda
 
-  def _build(self,
-             graph,
-             edge_model_kwargs=None,
-             node_model_kwargs=None,
-             global_model_kwargs=None):
+  def _build(self, graph):
     """Connects the GraphIndependent.
 
     Args:
       graph: A `graphs.GraphsTuple` containing non-`None` edges, nodes and
         globals.
-      edge_model_kwargs: Optional keyword arguments to pass to
-        the edge block model.
-      node_model_kwargs: Optional keyword arguments to pass to
-        the node block model.
-      global_model_kwargs: Optional keyword arguments to pass to
-        the global block model.
 
     Returns:
       An output `graphs.GraphsTuple` with updated edges, nodes and globals.
+
     """
-    if edge_model_kwargs is None:
-      edge_model_kwargs = {}
-    if node_model_kwargs is None:
-      node_model_kwargs = {}
-    if global_model_kwargs is None:
-      global_model_kwargs = {}
     return graph.replace(
-        edges=self._edge_model(graph.edges, **edge_model_kwargs),
-        nodes=self._node_model(graph.nodes, **node_model_kwargs),
-        globals=self._global_model(graph.globals, **global_model_kwargs))
+        edges=self._edge_model(graph.edges),
+        nodes=self._node_model(graph.nodes),
+        globals=self._global_model(graph.globals))
 
 
-class DeepSets(_base.AbstractModule):
+class DeepSets(snt.AbstractModule):
   """DeepSets module.
 
   Implementation for the model described in https://arxiv.org/abs/1703.06114
@@ -442,7 +399,7 @@ class DeepSets(_base.AbstractModule):
   def __init__(self,
                node_model_fn,
                global_model_fn,
-               reducer=tf.math.unsorted_segment_sum,
+               reducer=tf.unsorted_segment_sum,
                name="deep_sets"):
     """Initializes the DeepSets module.
 
@@ -455,7 +412,7 @@ class DeepSets(_base.AbstractModule):
         return a Sonnet module (or equivalent; see GlobalBlock for details).
       reducer: Reduction to be used when aggregating the nodes in the globals.
         This should be a callable whose signature matches
-        tf.math.unsorted_segment_sum.
+        tf.unsorted_segment_sum.
       name: The module name.
     """
     super(DeepSets, self).__init__(name=name)
@@ -474,10 +431,7 @@ class DeepSets(_base.AbstractModule):
           use_globals=False,
           nodes_reducer=reducer)
 
-  def _build(self,
-             graph,
-             node_model_kwargs=None,
-             global_model_kwargs=None):
+  def _build(self, graph):
     """Connects the DeepSets network.
 
     Args:
@@ -486,19 +440,58 @@ class DeepSets(_base.AbstractModule):
         global of `graph` should be concatenable on the last axis (i.e. the
         shapes of `graph.nodes` and `graph.globals` must match but for their
         first and last axis).
-      node_model_kwargs: Optional keyword arguments to pass to
-        the node block model.
-      global_model_kwargs: Optional keyword arguments to pass to
-        the global block model.
 
     Returns:
       An output `graphs.GraphsTuple` with updated globals.
     """
-    return self._global_block(
-        self._node_block(graph, node_model_kwargs), global_model_kwargs)
+    return self._global_block(self._node_block(graph))
 
 
-class CommNet(_base.AbstractModule):
+class OriCommNet(snt.AbstractModule):
+
+  def __init__(self,
+               edge_model_fn,
+               node_encoder_model_fn,
+               node_model_fn,
+               reducer=tf.unsorted_segment_sum,
+               name="oricomm_net"):
+    super(OriCommNet, self).__init__(name=name)
+
+    with self._enter_variable_scope():
+      # Computes $\Psi_{com}(x_j)$ in Eq. (2) of 1706.06122
+      self._edge_block = blocks.EdgeBlock(
+          edge_model_fn=edge_model_fn,
+          use_edges=False,
+          use_receiver_nodes=False,
+          use_sender_nodes=True,
+          use_globals=False)
+      # Computes $\Phi(x_i)$ in Eq. (2) of 1706.06122
+    self._node_encoder_block = blocks.NodeBlock(
+        node_model_fn=node_encoder_model_fn,
+        use_received_edges=False,
+        use_sent_edges=False,
+        use_nodes=True,
+        use_globals=False,
+        received_edges_reducer=reducer,
+        name="node_encoder_block")
+      # Computes $\Theta(..)$ in Eq.(2) of 1706.06122
+    self._node_block = blocks.NodeBlock(
+        node_model_fn=node_model_fn,
+        use_received_edges=True,
+        use_sent_edges=False,
+        use_nodes=True,
+        use_globals=False,
+        received_edges_reducer=reducer)
+
+  def _build(self, graph):
+    node_input = self._node_encoder_block(self._edge_block(graph))
+    #node_input = self._edge_block(graph)
+    # return self._node_block(node_input)
+    return graph.replace(nodes=self._node_block(node_input).nodes)
+#    return graph.replace(edges=node_input.edges) 
+
+
+class CommNet(snt.AbstractModule):
   """CommNet module.
 
   Implementation for the model originally described in
@@ -518,9 +511,9 @@ class CommNet(_base.AbstractModule):
 
   def __init__(self,
                edge_model_fn,
-               node_encoder_model_fn,
+              #  node_encoder_model_fn,
                node_model_fn,
-               reducer=tf.math.unsorted_segment_sum,
+               reducer=tf.unsorted_segment_sum,
                name="comm_net"):
     """Initializes the CommNet module.
 
@@ -536,7 +529,7 @@ class CommNet(_base.AbstractModule):
         return a Sonnet module (or equivalent; see NodeBlock for details).
       reducer: Reduction to be used when aggregating the edges in the nodes.
         This should be a callable whose signature matches
-        tf.math.unsorted_segment_sum.
+        tf.unsorted_segment_sum.
       name: The module name.
     """
     super(CommNet, self).__init__(name=name)
@@ -550,39 +543,29 @@ class CommNet(_base.AbstractModule):
           use_sender_nodes=True,
           use_globals=False)
       # Computes $\Phi(x_i)$ in Eq. (2) of 1706.06122
-      self._node_encoder_block = blocks.NodeBlock(
-          node_model_fn=node_encoder_model_fn,
-          use_received_edges=False,
-          use_sent_edges=False,
-          use_nodes=True,
-          use_globals=False,
-          received_edges_reducer=reducer,
-          name="node_encoder_block")
+      # self._node_encoder_block = blocks.NodeBlock(
+      #     node_model_fn=node_encoder_model_fn,
+      #     use_received_edges=False,
+      #     use_sent_edges=False,
+      #     use_nodes=True,
+      #     use_globals=False,
+      #     received_edges_reducer=reducer,
+      #     name="node_encoder_block")
       # Computes $\Theta(..)$ in Eq.(2) of 1706.06122
-      self._node_block = blocks.NodeBlock(
-          node_model_fn=node_model_fn,
-          use_received_edges=True,
-          use_sent_edges=False,
-          use_nodes=True,
-          use_globals=False,
-          received_edges_reducer=reducer)
+      # self._node_block = blocks.NodeBlock(
+      #     node_model_fn=node_model_fn,
+      #     use_received_edges=True,
+      #     use_sent_edges=False,
+      #     use_nodes=True,
+      #     use_globals=False,
+      #     received_edges_reducer=reducer)
 
-  def _build(self,
-             graph,
-             edge_model_kwargs=None,
-             node_encoder_model_kwargs=None,
-             node_model_kwargs=None):
+  def _build(self, graph):
     """Connects the CommNet network.
 
     Args:
       graph: A `graphs.GraphsTuple` containing `Tensor`s, with non-`None` nodes,
         receivers and senders.
-      edge_model_kwargs: Optional keyword arguments to pass to
-        the edge block model.
-      node_encoder_model_kwargs: Optional keyword arguments to pass to
-        the node block ecoder model.
-      node_model_kwargs: Optional keyword arguments to pass to
-        the node block model.
 
     Returns:
       An output `graphs.GraphsTuple` with updated nodes.
@@ -591,10 +574,10 @@ class CommNet(_base.AbstractModule):
       ValueError: if any of `graph.nodes`, `graph.receivers` or `graph.senders`
       is `None`.
     """
-    node_input = self._node_encoder_block(
-        self._edge_block(graph, edge_model_kwargs), node_encoder_model_kwargs)
-    return graph.replace(
-        nodes=self._node_block(node_input, node_model_kwargs).nodes)
+    # node_input = self._node_encoder_block(self._edge_block(graph))
+    node_input = self._edge_block(graph)
+    # return self._node_block(node_input)
+    return graph.replace(edges=node_input.edges) 
 
 
 def _unsorted_segment_softmax(data,
@@ -603,8 +586,8 @@ def _unsorted_segment_softmax(data,
                               name="unsorted_segment_softmax"):
   """Performs an elementwise softmax operation along segments of a tensor.
 
-  The input parameters are analogous to `tf.math.unsorted_segment_sum`. It
-  produces an output of the same shape as the input data, after performing an
+  The input parameters are analogous to `tf.unsorted_segment_sum`. It produces
+  an output of the same shape as the input data, after performing an
   elementwise sofmax operation between all of the rows with common segment id.
 
   Args:
@@ -620,14 +603,13 @@ def _unsorted_segment_softmax(data,
 
   """
   with tf.name_scope(name):
-    segment_maxes = tf.math.unsorted_segment_max(data, segment_ids,
-                                                 num_segments)
+    segment_maxes = tf.unsorted_segment_max(data, segment_ids, num_segments)
     maxes = tf.gather(segment_maxes, segment_ids)
     # Possibly refactor to `tf.stop_gradient(maxes)` for better performance.
     data -= maxes
     exp_data = tf.exp(data)
-    segment_sum_exp_data = tf.math.unsorted_segment_sum(exp_data, segment_ids,
-                                                        num_segments)
+    segment_sum_exp_data = tf.unsorted_segment_sum(exp_data, segment_ids,
+                                                   num_segments)
     sum_exp_data = tf.gather(segment_sum_exp_data, segment_ids)
     return exp_data / sum_exp_data
 
@@ -654,7 +636,7 @@ def _received_edges_normalizer(graph,
         num_segments=tf.reduce_sum(graph.n_node))
 
 
-class SelfAttention(_base.AbstractModule):
+class SelfAttention(snt.AbstractModule):
   """Multi-head self-attention module.
 
   The module is based on the following three papers:
@@ -746,16 +728,13 @@ class SelfAttention(_base.AbstractModule):
     # Summing all of the attended values from each node.
     # [total_num_nodes, num_heads, embedding_size]
     received_edges_aggregator = blocks.ReceivedEdgesToNodesAggregator(
-        reducer=tf.math.unsorted_segment_sum)
+        reducer=tf.unsorted_segment_sum)
     aggregated_attended_values = received_edges_aggregator(
         attention_graph.replace(edges=attented_edges))
 
     return attention_graph.replace(nodes=aggregated_attended_values)
 
-
-
-
-class obsEncoder(_base.AbstractModule):
+class obsEncoder(snt.AbstractModule):
  
   def __init__(self,
                encoder_fn,
@@ -774,7 +753,7 @@ class obsEncoder(_base.AbstractModule):
     node_input = self._node_encoder_block(graph)
     return graph.replace(nodes=node_input.nodes)
   
-class qEncoder(_base.AbstractModule):
+class qEncoder(snt.AbstractModule):
   def __init__(self,
               #  conv_fn,
                mlp_fn,
@@ -794,7 +773,7 @@ class qEncoder(_base.AbstractModule):
     return graph.replace(q=node_input.q)
   
 
-class LCommNet(_base.AbstractModule):
+class LCommNet(snt.AbstractModule):
   def __init__(self,
                edge_model_fn,
               #  node_encoder_model_fn,
@@ -824,7 +803,7 @@ class LCommNet(_base.AbstractModule):
     node_input = self._edge_block(graph)
     return self._node_block(node_input)
     #return node_input
-class LCommNet2(_base.AbstractModule):
+class LCommNet2(snt.AbstractModule):
   def __init__(self,
                edge_model_fn,
               #  node_encoder_model_fn,
@@ -854,7 +833,7 @@ class LCommNet2(_base.AbstractModule):
     node_input = self._edge_block(graph)
     return self._node_block(node_input)
  
-class HCommNet(_base.AbstractModule):
+class HCommNet(snt.AbstractModule):
   def __init__(self,
                edge_model_fn,
               #  node_encoder_model_fn,
@@ -884,7 +863,7 @@ class HCommNet(_base.AbstractModule):
     return self._node_block(node_input)
 
 
-class TCommNet(_base.AbstractModule):
+class TCommNet(snt.AbstractModule):
   def __init__(self,
                edge_model_fn,
               #  node_encoder_model_fn,

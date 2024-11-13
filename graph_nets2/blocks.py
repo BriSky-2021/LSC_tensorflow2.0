@@ -32,11 +32,12 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from graph_nets import _base
+
 from graph_nets import graphs
 from graph_nets import utils_tf
-
+import sonnet as snt
 import tensorflow as tf
+import pdb
 
 
 NODES = graphs.NODES
@@ -44,9 +45,23 @@ EDGES = graphs.EDGES
 GLOBALS = graphs.GLOBALS
 RECEIVERS = graphs.RECEIVERS
 SENDERS = graphs.SENDERS
+HSENDERS=graphs.HSENDERS
+HRECEIVERS=graphs.HRECEIVERS
+HEDGES=graphs.HEDGES
+# HNODES=graphs.HNODES
+
+LSENDERS=graphs.LSENDERS
+LRECEIVERS=graphs.LRECEIVERS
+LEDGES=graphs.LEDGES
+# LNODES=graphs.LNODES
+
 GLOBALS = graphs.GLOBALS
 N_NODE = graphs.N_NODE
 N_EDGE = graphs.N_EDGE
+N_HEDGE = graphs.N_HEDGE
+Q=graphs.Q
+ACT=graphs.ACT
+OBS=graphs.OBS
 
 
 def _validate_graph(graph, mandatory_fields, additional_message=None):
@@ -64,18 +79,7 @@ def _validate_broadcasted_graph(graph, from_field, to_field):
   _validate_graph(graph, [from_field, to_field], additional_message)
 
 
-def _get_static_num_nodes(graph):
-  """Returns the static total number of nodes in a batch or None."""
-  return None if graph.nodes is None else graph.nodes.shape.as_list()[0]
-
-
-def _get_static_num_edges(graph):
-  """Returns the static total number of edges in a batch or None."""
-  return None if graph.senders is None else graph.senders.shape.as_list()[0]
-
-
-def broadcast_globals_to_edges(graph, name="broadcast_globals_to_edges",
-                               num_edges_hint=None):
+def broadcast_globals_to_edges(graph, name="broadcast_globals_to_edges"):
   """Broadcasts the global features to the edges of a graph.
 
   Args:
@@ -83,7 +87,6 @@ def broadcast_globals_to_edges(graph, name="broadcast_globals_to_edges",
       shape `[n_graphs] + global_shape`, and `N_EDGE` field of shape
       `[n_graphs]`.
     name: (string, optional) A name for the operation.
-    num_edges_hint: Integer indicating the total number of edges, if known.
 
   Returns:
     A tensor of shape `[n_edges] + global_shape`, where
@@ -97,12 +100,10 @@ def broadcast_globals_to_edges(graph, name="broadcast_globals_to_edges",
   """
   _validate_broadcasted_graph(graph, GLOBALS, N_EDGE)
   with tf.name_scope(name):
-    return utils_tf.repeat(graph.globals, graph.n_edge, axis=0,
-                           sum_repeats_hint=num_edges_hint)
+    return utils_tf.repeat(graph.globals, graph.n_edge, axis=0)
 
 
-def broadcast_globals_to_nodes(graph, name="broadcast_globals_to_nodes",
-                               num_nodes_hint=None):
+def broadcast_globals_to_nodes(graph, name="broadcast_globals_to_nodes"):
   """Broadcasts the global features to the nodes of a graph.
 
   Args:
@@ -110,7 +111,6 @@ def broadcast_globals_to_nodes(graph, name="broadcast_globals_to_nodes",
       shape `[n_graphs] + global_shape`, and `N_NODE` field of shape
       `[n_graphs]`.
     name: (string, optional) A name for the operation.
-    num_nodes_hint: Integer indicating the total number of nodes, if known.
 
   Returns:
     A tensor of shape `[n_nodes] + global_shape`, where
@@ -124,8 +124,7 @@ def broadcast_globals_to_nodes(graph, name="broadcast_globals_to_nodes",
   """
   _validate_broadcasted_graph(graph, GLOBALS, N_NODE)
   with tf.name_scope(name):
-    return utils_tf.repeat(graph.globals, graph.n_node, axis=0,
-                           sum_repeats_hint=num_nodes_hint)
+    return utils_tf.repeat(graph.globals, graph.n_node, axis=0)
 
 
 def broadcast_sender_nodes_to_edges(
@@ -149,7 +148,17 @@ def broadcast_sender_nodes_to_edges(
   _validate_broadcasted_graph(graph, NODES, SENDERS)
   with tf.name_scope(name):
     return tf.gather(graph.nodes, graph.senders)
+def broadcast_lsender_nodes_to_ledges(
+    graph, name="broadcast_lsender_nodes_to_ledges"):
+  _validate_broadcasted_graph(graph, NODES, LSENDERS)
+  with tf.name_scope(name):
+    return tf.gather(graph.nodes, graph.lsenders)
 
+def broadcast_hsender_nodes_to_hedges(
+    graph, name="broadcast_hsender_nodes_to_hedges"):
+  _validate_broadcasted_graph(graph, NODES, HSENDERS)
+  with tf.name_scope(name):
+    return tf.gather(graph.nodes, graph.hsenders)
 
 def broadcast_receiver_nodes_to_edges(
     graph, name="broadcast_receiver_nodes_to_edges"):
@@ -172,8 +181,13 @@ def broadcast_receiver_nodes_to_edges(
   with tf.name_scope(name):
     return tf.gather(graph.nodes, graph.receivers)
 
+def broadcast_lreceiver_nodes_to_ledges(
+    graph, name="broadcast_lreceiver_nodes_to_ledges"):
+  _validate_broadcasted_graph(graph, NODES, LRECEIVERS)
+  with tf.name_scope(name):
+    return tf.gather(graph.nodes, graph.lreceivers)
 
-class EdgesToGlobalsAggregator(_base.AbstractModule):
+class EdgesToGlobalsAggregator(snt.AbstractModule):
   """Aggregates all edges into globals."""
 
   def __init__(self, reducer, name="edges_to_globals_aggregator"):
@@ -186,9 +200,9 @@ class EdgesToGlobalsAggregator(_base.AbstractModule):
     under permutation of edge features within each graph.
 
     Examples of compatible reducers are:
-    * tf.math.unsorted_segment_sum
-    * tf.math.unsorted_segment_mean
-    * tf.math.unsorted_segment_prod
+    * tf.unsorted_segment_sum
+    * tf.unsorted_segment_mean
+    * tf.unsorted_segment_prod
     * unsorted_segment_min_or_zero
     * unsorted_segment_max_or_zero
 
@@ -205,12 +219,11 @@ class EdgesToGlobalsAggregator(_base.AbstractModule):
                     additional_message="when aggregating from edges.")
     num_graphs = utils_tf.get_num_graphs(graph)
     graph_index = tf.range(num_graphs)
-    indices = utils_tf.repeat(graph_index, graph.n_edge, axis=0,
-                              sum_repeats_hint=_get_static_num_edges(graph))
+    indices = utils_tf.repeat(graph_index, graph.n_edge, axis=0)
     return self._reducer(graph.edges, indices, num_graphs)
 
 
-class NodesToGlobalsAggregator(_base.AbstractModule):
+class NodesToGlobalsAggregator(snt.AbstractModule):
   """Aggregates all nodes into globals."""
 
   def __init__(self, reducer, name="nodes_to_globals_aggregator"):
@@ -223,9 +236,9 @@ class NodesToGlobalsAggregator(_base.AbstractModule):
     under permutation of node features within each graph.
 
     Examples of compatible reducers are:
-    * tf.math.unsorted_segment_sum
-    * tf.math.unsorted_segment_mean
-    * tf.math.unsorted_segment_prod
+    * tf.unsorted_segment_sum
+    * tf.unsorted_segment_mean
+    * tf.unsorted_segment_prod
     * unsorted_segment_min_or_zero
     * unsorted_segment_max_or_zero
 
@@ -242,12 +255,11 @@ class NodesToGlobalsAggregator(_base.AbstractModule):
                     additional_message="when aggregating from nodes.")
     num_graphs = utils_tf.get_num_graphs(graph)
     graph_index = tf.range(num_graphs)
-    indices = utils_tf.repeat(graph_index, graph.n_node, axis=0,
-                              sum_repeats_hint=_get_static_num_nodes(graph))
+    indices = utils_tf.repeat(graph_index, graph.n_node, axis=0)
     return self._reducer(graph.nodes, indices, num_graphs)
 
 
-class _EdgesToNodesAggregator(_base.AbstractModule):
+class _EdgesToNodesAggregator(snt.AbstractModule):
   """Agregates sent or received edges into the corresponding nodes."""
 
   def __init__(self, reducer, use_sent_edges=False,
@@ -259,15 +271,41 @@ class _EdgesToNodesAggregator(_base.AbstractModule):
   def _build(self, graph):
     _validate_graph(graph, (EDGES, SENDERS, RECEIVERS,),
                     additional_message="when aggregating from edges.")
-    # If the number of nodes are known at graph construction time (based on the
-    # shape) then use that value to make the model compatible with XLA/TPU.
-    if graph.nodes is not None and graph.nodes.shape.as_list()[0] is not None:
-      num_nodes = graph.nodes.shape.as_list()[0]
-    else:
-      num_nodes = tf.reduce_sum(graph.n_node)
+    num_nodes = tf.reduce_sum(graph.n_node)
     indices = graph.senders if self._use_sent_edges else graph.receivers
     return self._reducer(graph.edges, indices, num_nodes)
 
+class _LEdgesToNodesAggregator(snt.AbstractModule):
+  """Agregates sent or received edges into the corresponding nodes."""
+
+  def __init__(self, reducer, use_sent_edges=False,
+               name="ledges_to_nodes_aggregator"):
+    super(_LEdgesToNodesAggregator, self).__init__(name=name)
+    self._reducer = reducer
+    self._use_sent_edges = use_sent_edges
+
+  def _build(self, graph):
+    _validate_graph(graph, (LEDGES, LSENDERS, LRECEIVERS,),
+                    additional_message="when aggregating from edges.")
+    num_nodes = tf.reduce_sum(graph.n_node)
+    indices = graph.lsenders if self._use_sent_edges else graph.lreceivers
+    return self._reducer(graph.ledges, indices, num_nodes)
+
+class _HEdgesToNodesAggregator(snt.AbstractModule):
+  """Agregates sent or received edges into the corresponding nodes."""
+
+  def __init__(self, reducer, use_sent_edges=False,
+               name="edges_to_nodes_aggregator"):
+    super(_HEdgesToNodesAggregator, self).__init__(name=name)
+    self._reducer = reducer
+    self._use_sent_edges = use_sent_edges
+
+  def _build(self, graph):
+    _validate_graph(graph, (HEDGES, HSENDERS, HRECEIVERS,),
+                    additional_message="when aggregating from edges.")
+    num_nodes = tf.reduce_sum(graph.n_node)
+    indices = graph.hsenders if self._use_sent_edges else graph.hreceivers
+    return self._reducer(graph.hedges, indices, num_nodes)
 
 class SentEdgesToNodesAggregator(_EdgesToNodesAggregator):
   """Agregates sent edges into the corresponding sender nodes."""
@@ -282,9 +320,9 @@ class SentEdgesToNodesAggregator(_EdgesToNodesAggregator):
     under permutation of edge features within each segment.
 
     Examples of compatible reducers are:
-    * tf.math.unsorted_segment_sum
-    * tf.math.unsorted_segment_mean
-    * tf.math.unsorted_segment_prod
+    * tf.unsorted_segment_sum
+    * tf.unsorted_segment_mean
+    * tf.unsorted_segment_prod
     * unsorted_segment_min_or_zero
     * unsorted_segment_max_or_zero
 
@@ -312,9 +350,9 @@ class ReceivedEdgesToNodesAggregator(_EdgesToNodesAggregator):
     under permutation of edge features within each segment.
 
     Examples of compatible reducers are:
-    * tf.math.unsorted_segment_sum
-    * tf.math.unsorted_segment_mean
-    * tf.math.unsorted_segment_prod
+    * tf.unsorted_segment_sum
+    * tf.unsorted_segment_mean
+    * tf.unsorted_segment_prod
     * unsorted_segment_min_or_zero
     * unsorted_segment_max_or_zero
 
@@ -326,11 +364,20 @@ class ReceivedEdgesToNodesAggregator(_EdgesToNodesAggregator):
     super(ReceivedEdgesToNodesAggregator, self).__init__(
         use_sent_edges=False, reducer=reducer, name=name)
 
+class LReceivedEdgesToNodesAggregator(_LEdgesToNodesAggregator):
+ 
+  def __init__(self, reducer, name="lreceived_edges_to_nodes_aggregator"):
+    super(LReceivedEdgesToNodesAggregator, self).__init__(
+        use_sent_edges=False, reducer=reducer, name=name)
 
+class HReceivedEdgesToNodesAggregator(_HEdgesToNodesAggregator):
+  def __init__(self, reducer, name="received_edges_to_nodes_aggregator"):
+    super(HReceivedEdgesToNodesAggregator, self).__init__(
+        use_sent_edges=False, reducer=reducer, name=name)
 def _unsorted_segment_reduction_or_zero(reducer, values, indices, num_groups):
   """Common code for unsorted_segment_{min,max}_or_zero (below)."""
   reduced = reducer(values, indices, num_groups)
-  present_indices = tf.math.unsorted_segment_max(
+  present_indices = tf.unsorted_segment_max(
       tf.ones_like(indices, dtype=reduced.dtype), indices, num_groups)
   present_indices = tf.clip_by_value(present_indices, 0, 1)
   present_indices = tf.reshape(
@@ -344,7 +391,7 @@ def unsorted_segment_min_or_zero(values, indices, num_groups,
   """Aggregates information using elementwise min.
 
   Segments with no elements are given a "min" of zero instead of the most
-  positive finite value possible (which is what `tf.math.unsorted_segment_min`
+  positive finite value possible (which is what `tf.unsorted_segment_min`
   would do).
 
   Args:
@@ -358,7 +405,7 @@ def unsorted_segment_min_or_zero(values, indices, num_groups,
   """
   with tf.name_scope(name):
     return _unsorted_segment_reduction_or_zero(
-        tf.math.unsorted_segment_min, values, indices, num_groups)
+        tf.unsorted_segment_min, values, indices, num_groups)
 
 
 def unsorted_segment_max_or_zero(values, indices, num_groups,
@@ -366,8 +413,8 @@ def unsorted_segment_max_or_zero(values, indices, num_groups,
   """Aggregates information using elementwise max.
 
   Segments with no elements are given a "max" of zero instead of the most
-  negative finite value possible (which is what `tf.math.unsorted_segment_max`
-  would do).
+  negative finite value possible (which is what `tf.unsorted_segment_max` would
+  do).
 
   Args:
     values: A `Tensor` of per-element features.
@@ -380,10 +427,10 @@ def unsorted_segment_max_or_zero(values, indices, num_groups,
   """
   with tf.name_scope(name):
     return _unsorted_segment_reduction_or_zero(
-        tf.math.unsorted_segment_max, values, indices, num_groups)
+        tf.unsorted_segment_max, values, indices, num_groups)
 
 
-class EdgeBlock(_base.AbstractModule):
+class EdgeBlock(snt.AbstractModule):
   """Edge block.
 
   A block that updates the features of each edge in a batch of graphs based on
@@ -437,7 +484,7 @@ class EdgeBlock(_base.AbstractModule):
     with self._enter_variable_scope():
       self._edge_model = edge_model_fn()
 
-  def _build(self, graph, edge_model_kwargs=None):
+  def _build(self, graph):
     """Connects the edge block.
 
     Args:
@@ -446,7 +493,6 @@ class EdgeBlock(_base.AbstractModule):
         `use_receiver_nodes` or `use_sender_nodes` is `True`) and per graph
         globals (if `use_globals` is `True`) should be concatenable on the last
         axis.
-      edge_model_kwargs: Optional keyword arguments to pass to the `edge_model`.
 
     Returns:
       An output `graphs.GraphsTuple` with updated edges.
@@ -456,9 +502,6 @@ class EdgeBlock(_base.AbstractModule):
         if `graph` has `None` fields incompatible with the selected `use_edges`,
         `use_receiver_nodes`, `use_sender_nodes`, or `use_globals` options.
     """
-    if edge_model_kwargs is None:
-      edge_model_kwargs = {}
-
     _validate_graph(
         graph, (SENDERS, RECEIVERS, N_EDGE), " when using an EdgeBlock")
 
@@ -475,16 +518,13 @@ class EdgeBlock(_base.AbstractModule):
       edges_to_collect.append(broadcast_sender_nodes_to_edges(graph))
 
     if self._use_globals:
-      num_edges_hint = _get_static_num_edges(graph)
-      edges_to_collect.append(
-          broadcast_globals_to_edges(graph, num_edges_hint=num_edges_hint))
-
+      edges_to_collect.append(broadcast_globals_to_edges(graph))
     collected_edges = tf.concat(edges_to_collect, axis=-1)
-    updated_edges = self._edge_model(collected_edges, **edge_model_kwargs)
+    updated_edges = self._edge_model(collected_edges)
     return graph.replace(edges=updated_edges)
 
 
-class NodeBlock(_base.AbstractModule):
+class NodeBlock(snt.AbstractModule):
   """Node block.
 
   A block that updates the features of each node in batch of graphs based on
@@ -500,8 +540,8 @@ class NodeBlock(_base.AbstractModule):
                use_sent_edges=False,
                use_nodes=True,
                use_globals=True,
-               received_edges_reducer=tf.math.unsorted_segment_sum,
-               sent_edges_reducer=tf.math.unsorted_segment_sum,
+               received_edges_reducer=tf.unsorted_segment_sum,
+               sent_edges_reducer=tf.unsorted_segment_sum,
                name="node_block"):
     """Initializes the NodeBlock module.
 
@@ -523,10 +563,10 @@ class NodeBlock(_base.AbstractModule):
         attributes.
       received_edges_reducer: Reduction to be used when aggregating received
         edges. This should be a callable whose signature matches
-        `tf.math.unsorted_segment_sum`.
+        `tf.unsorted_segment_sum`.
       sent_edges_reducer: Reduction to be used when aggregating sent edges.
         This should be a callable whose signature matches
-        `tf.math.unsorted_segment_sum`.
+        `tf.unsorted_segment_sum`.
       name: The module name.
 
     Raises:
@@ -561,7 +601,7 @@ class NodeBlock(_base.AbstractModule):
         self._sent_edges_aggregator = SentEdgesToNodesAggregator(
             sent_edges_reducer)
 
-  def _build(self, graph, node_model_kwargs=None):
+  def _build(self, graph):
     """Connects the node block.
 
     Args:
@@ -569,13 +609,10 @@ class NodeBlock(_base.AbstractModule):
         features (if `use_received_edges` or `use_sent_edges` is `True`),
         individual nodes features (if `use_nodes` is True) and per graph globals
         (if `use_globals` is `True`) should be concatenable on the last axis.
-      node_model_kwargs: Optional keyword arguments to pass to the `node_model`.
 
     Returns:
       An output `graphs.GraphsTuple` with updated nodes.
     """
-    if node_model_kwargs is None:
-      node_model_kwargs = {}
 
     nodes_to_collect = []
 
@@ -590,19 +627,14 @@ class NodeBlock(_base.AbstractModule):
       nodes_to_collect.append(graph.nodes)
 
     if self._use_globals:
-      # The hint will be an integer if the graph has node features and the total
-      # number of nodes is known at tensorflow graph definition time, or None
-      # otherwise.
-      num_nodes_hint = _get_static_num_nodes(graph)
-      nodes_to_collect.append(
-          broadcast_globals_to_nodes(graph, num_nodes_hint=num_nodes_hint))
+      nodes_to_collect.append(broadcast_globals_to_nodes(graph))
 
     collected_nodes = tf.concat(nodes_to_collect, axis=-1)
-    updated_nodes = self._node_model(collected_nodes, **node_model_kwargs)
+    updated_nodes = self._node_model(collected_nodes)
     return graph.replace(nodes=updated_nodes)
 
 
-class GlobalBlock(_base.AbstractModule):
+class GlobalBlock(snt.AbstractModule):
   """Global block.
 
   A block that updates the global features of each graph in a batch based on
@@ -617,8 +649,8 @@ class GlobalBlock(_base.AbstractModule):
                use_edges=True,
                use_nodes=True,
                use_globals=True,
-               nodes_reducer=tf.math.unsorted_segment_sum,
-               edges_reducer=tf.math.unsorted_segment_sum,
+               nodes_reducer=tf.unsorted_segment_sum,
+               edges_reducer=tf.unsorted_segment_sum,
                name="global_block"):
     """Initializes the GlobalBlock module.
 
@@ -636,9 +668,9 @@ class GlobalBlock(_base.AbstractModule):
       use_globals: (bool, default=True) Whether to condition on global
         attributes.
       nodes_reducer: Reduction to be used when aggregating nodes. This should
-        be a callable whose signature matches tf.math.unsorted_segment_sum.
+        be a callable whose signature matches tf.unsorted_segment_sum.
       edges_reducer: Reduction to be used when aggregating edges. This should
-        be a callable whose signature matches tf.math.unsorted_segment_sum.
+        be a callable whose signature matches tf.unsorted_segment_sum.
       name: The module name.
 
     Raises:
@@ -670,7 +702,7 @@ class GlobalBlock(_base.AbstractModule):
         self._nodes_aggregator = NodesToGlobalsAggregator(
             nodes_reducer)
 
-  def _build(self, graph, global_model_kwargs=None):
+  def _build(self, graph):
     """Connects the global block.
 
     Args:
@@ -678,15 +710,10 @@ class GlobalBlock(_base.AbstractModule):
         (if `use_edges` is `True`), individual nodes (if `use_nodes` is True)
         and per graph globals (if `use_globals` is `True`) should be
         concatenable on the last axis.
-      global_model_kwargs: Optional keyword argumentsto pass to
-        the `global_model`.
 
     Returns:
       An output `graphs.GraphsTuple` with updated globals.
     """
-    if global_model_kwargs is None:
-      global_model_kwargs = {}
-
     globals_to_collect = []
 
     if self._use_edges:
@@ -702,12 +729,10 @@ class GlobalBlock(_base.AbstractModule):
       globals_to_collect.append(graph.globals)
 
     collected_globals = tf.concat(globals_to_collect, axis=-1)
-    updated_globals = self._global_model(
-        collected_globals, **global_model_kwargs)
+    updated_globals = self._global_model(collected_globals)
     return graph.replace(globals=updated_globals)
 
-
-class obsEncoderBlock(_base.AbstractModule):
+class obsEncoderBlock(snt.AbstractModule):
 
   def __init__(self,
                encoder_fn,
@@ -729,7 +754,7 @@ class obsEncoderBlock(_base.AbstractModule):
     
     return graph.replace(nodes=updated_nodes)
 
-class qEncoderBlock(_base.AbstractModule):
+class qEncoderBlock(snt.AbstractModule):
 
   def __init__(self,
               #  conv_fn,
@@ -753,7 +778,7 @@ class qEncoderBlock(_base.AbstractModule):
     # updated_nodes=self._mlp_model(graph.nodes)
     return graph.replace(q=updated_nodes)
 
-class LEdgeBlock(_base.AbstractModule):
+class LEdgeBlock(snt.AbstractModule):
   def __init__(self,
                edge_model_fn,
                use_edges=False,
@@ -812,7 +837,7 @@ class LEdgeBlock(_base.AbstractModule):
     updated_edges = self._edge_model(collected_edges)
     return graph.replace(ledges=updated_edges)
 
-class toHNodeBlock(_base.AbstractModule):
+class toHNodeBlock(snt.AbstractModule):
   def __init__(self,
                node_model_fn,
                use_received_edges=True,
@@ -856,7 +881,7 @@ class toHNodeBlock(_base.AbstractModule):
     collected_nodes = tf.concat(nodes_to_collect, axis=-1)
     updated_nodes = self._node_model(collected_nodes)
     return graph.replace(hnodes=updated_nodes)
-class toLNodeBlock(_base.AbstractModule):
+class toLNodeBlock(snt.AbstractModule):
   def __init__(self,
                node_model_fn,
                use_received_edges=True,
@@ -901,7 +926,7 @@ class toLNodeBlock(_base.AbstractModule):
     updated_nodes = self._node_model(collected_nodes)
     return graph.replace(lnodes=updated_nodes)
 
-class LNodeBlock(_base.AbstractModule):
+class LNodeBlock(snt.AbstractModule):
   def __init__(self,
                node_model_fn,
                use_received_edges=True,
@@ -948,7 +973,7 @@ class LNodeBlock(_base.AbstractModule):
     return graph.replace(lnodes=updated_nodes)
 
 
-class HEdgeBlock(_base.AbstractModule):
+class HEdgeBlock(snt.AbstractModule):
 
   def __init__(self,
                edge_model_fn,
@@ -998,7 +1023,7 @@ class HEdgeBlock(_base.AbstractModule):
     return graph.replace(hedges=updated_edges)
 
 
-class HNodeBlock(_base.AbstractModule):
+class HNodeBlock(snt.AbstractModule):
   def __init__(self,
                node_model_fn,
                use_received_edges=True,

@@ -30,7 +30,7 @@ This representation could typically take the following form, for a batch of
     graph.
 
   - N_EDGE: The number of edges per graph. It is a vector of integers with shape
-    `[n_graphs]`, such that `graph.N_EDGE[i]` is the number of edges in the i-th
+    `[n_graphs]`, such that `graph.N_NODE[i]` is the number of edges in the i-th
     graph.
 
   - NODES: The nodes features. It is either `None` (the graph has no node
@@ -42,18 +42,18 @@ This representation could typically take the following form, for a batch of
     graph will have its features in the
     `1 + graph.N_NODE[0] + graph.N_NODE[1]`-th slot of graph.NODES.
     Observe that having a `None` value for this field does not mean that the
-    graphs have no nodes, only that they do not have node features.
+    graphs have no nodes, only that they do not have features.
 
   - EDGES: The edges features. It is either `None` (the graph has no edge
     features), or a vector of shape `[n_edges] + edge_shape`, where
     `n_edges = sum(graph.N_EDGE)` is the total number of edges in the batch of
-    graphs, and `edge_shape` represents the shape of the features of each edge.
+    graphs, and `edge_shape` represents the shape of the features of each ede.
     The relative index of an edge from the batched version can be recovered from
     the `graph.N_EDGE` property. For instance, the third edge of the third
     graph will have its features in the `2 + graph.N_EDGE[0] + graph.N_EDGE[1]`-
     th slot of graph.EDGES.
     Observe that having a `None` value for this field does not necessarily mean
-    that the graph has no edges, only that they do not have edge features.
+    that the graph has no edges, only that they do not have features.
 
   - RECEIVERS: The indices of the receiver nodes, for each edge. It is either
     `None` (if the graph has no edges), or a vector of integers of shape
@@ -107,6 +107,7 @@ from __future__ import print_function
 
 import collections
 
+
 NODES = "nodes"
 EDGES = "edges"
 RECEIVERS = "receivers"
@@ -139,7 +140,6 @@ GRAPH_DATA_FIELDS = (NODES, EDGES, RECEIVERS, SENDERS, GLOBALS,OBS,Q,ACT,LEDGES,
 GRAPH_NUMBER_FIELDS = (N_NODE, N_EDGE,N_HEDGE)
 ALL_FIELDS = (NODES, EDGES, RECEIVERS, SENDERS, GLOBALS, N_NODE, N_EDGE,OBS,Q,ACT,LEDGES,HEDGES,LRECEIVERS,LSENDERS,HRECEIVERS,HSENDERS,N_HEDGE,LNODES,HNODES)
 # ,LNODES,HNODES)
-
 
 
 class GraphsTuple(
