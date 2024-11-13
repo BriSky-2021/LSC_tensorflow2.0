@@ -102,7 +102,10 @@ if __name__ == '__main__':
     # print('aa')
     # print(args.crp)
 
-    sess = tf.Session(config=tf_config)
+
+    # 替换 tf.Session 为 tf.compat.v1.Session
+    sess = tf.compat.v1.Session(config=tf_config)
+    #sess = tf.Session(config=tf_config)
     main_model_dir = os.path.join(BASE_DIR, 'data/models/{}-0'.format(args.algo+'fixtiny64a6h'+str(args.seed)+'-'+str(args.len_nei)))
 
 
@@ -120,7 +123,9 @@ if __name__ == '__main__':
     else:
         print('do not use msg models')
         MsgModels=[None,None]
-    sess.run(tf.global_variables_initializer())
+    # 替换
+    sess.run(tf.compat.v1.global_variables_initializer())
+    #sess.run(tf.global_variables_initializer())
 
     if args.idx!='None':
     #    models[0].load(main_model_dir, step=args.idx)
